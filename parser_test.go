@@ -75,9 +75,9 @@ func TestParser_ParseStatement(t *testing.T) {
 
 		// Errors
 		{s: `foo`, err: `found unexpected token "f"`},
-		{s: `dX`, err: `unrecognised die type "X"`},
+		{s: `dX`, err: `unrecognised die type "dX"`},
 		{s: `d4--`, err: `found unexpected token "-"`},
-		{s: `3d4d5`, err: `found unexpected token "5"`},
+		{s: `3d4d5`, err: `found unexpected token "d5"`},
 	}
 
 	for i, tt := range tests {

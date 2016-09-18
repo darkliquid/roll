@@ -15,4 +15,26 @@ const (
 	// Modifiers
 	tPLUS
 	tMINUS
+
+	// Extra rules
+	tFAILURES
+	tEXPLODE
+	tCOMPOUND
+	tPENETRATE
+	tKEEPHIGH
+	tKEEPLOW
+	tDROPHIGH
+	tDROPLOW
+	tREROLL
+	tSORT
+
+	// Tests
+	tGREATER
+	tLESS
+	tEQUAL
+
+	// Grouping
+	tGROUPSTART
+	tGROUPEND
+	tGROUPSEP
 )

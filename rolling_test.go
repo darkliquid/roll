@@ -26,7 +26,7 @@ func TestParse(t *testing.T) {
 		{seed: 0, in: "d6-1", out: `Rolled "d6-1" and got 1 for a total of 0`},
 
 		// Errors
-		{seed: 0, in: "3dX-2", out: `unrecognised die type "X"`},
+		{seed: 0, in: "3dX-2", out: `unrecognised die type "dX"`},
 		{seed: 0, in: "CRAP", out: `found unexpected token "C"`},
 	}
 
@@ -63,7 +63,7 @@ func TestParseString(t *testing.T) {
 		{seed: 0, in: "d6-1", out: `Rolled "d6-1" and got 1 for a total of 0`},
 
 		// Errors
-		{seed: 0, in: "3dX-2", out: `unrecognised die type "X"`},
+		{seed: 0, in: "3dX-2", out: `unrecognised die type "dX"`},
 		{seed: 0, in: "CRAP", out: `found unexpected token "C"`},
 	}
 

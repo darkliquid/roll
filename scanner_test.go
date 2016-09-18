@@ -24,13 +24,42 @@ func TestScanner_Scan(t *testing.T) {
 		{s: `123`, tok: tNUM, lit: `123`},
 
 		// Dice
-		{s: `d200`, tok: tDIE, lit: "200"},
-		{s: `dF`, tok: tDIE, lit: "F"},
-		{s: `d4d5`, tok: tDIE, lit: "4"},
+		{s: `d200`, tok: tDIE, lit: "d200"},
+		{s: `dF`, tok: tDIE, lit: "dF"},
+		{s: `d4d5`, tok: tDIE, lit: "d4"},
 
 		// Modifiers
 		{s: `+`, tok: tPLUS, lit: "+"},
 		{s: `-`, tok: tMINUS, lit: "-"},
+
+		// Extra rules
+		{s: `f`, tok: tFAILURES, lit: "f"},
+		{s: `!`, tok: tEXPLODE, lit: "!"},
+		{s: `!!`, tok: tCOMPOUND, lit: "!!"},
+		{s: `!p`, tok: tPENETRATE, lit: "!p"},
+		{s: `kh`, tok: tKEEPHIGH, lit: "kh"},
+		{s: `kh3`, tok: tKEEPHIGH, lit: "kh3"},
+		{s: `kl`, tok: tKEEPLOW, lit: "kl"},
+		{s: `kl3`, tok: tKEEPLOW, lit: "kl3"},
+		{s: `kx`, tok: tILLEGAL, lit: "kx"},
+		{s: `dh`, tok: tDROPHIGH, lit: "dh"},
+		{s: `dh3`, tok: tDROPHIGH, lit: "dh3"},
+		{s: `dl`, tok: tDROPLOW, lit: "dl"},
+		{s: `dl3`, tok: tDROPLOW, lit: "dl3"},
+		{s: `r`, tok: tREROLL, lit: "r"},
+		{s: `ro`, tok: tREROLL, lit: "ro"},
+		{s: `s`, tok: tSORT, lit: "s"},
+		{s: `sd`, tok: tSORT, lit: "sd"},
+
+		// Tests
+		{s: `>`, tok: tGREATER, lit: ">"},
+		{s: `<`, tok: tLESS, lit: "<"},
+		{s: `=`, tok: tEQUAL, lit: "="},
+
+		// Grouping
+		{s: `{`, tok: tGROUPSTART, lit: "{"},
+		{s: `}`, tok: tGROUPEND, lit: "}"},
+		{s: `,`, tok: tGROUPSEP, lit: ","},
 	}
 
 	for i, tt := range tests {

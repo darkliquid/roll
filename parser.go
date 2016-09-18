@@ -92,12 +92,13 @@ func (p *Parser) Parse() (stmt *DiceRollStmt, err error) {
 }
 
 func (p *Parser) parseDie(dieCode string) (Die, error) {
-	if num, err := strconv.Atoi(dieCode); err == nil {
+	trimmedDieCode := strings.TrimPrefix(strings.ToUpper(dieCode), "D")
+	if num, err := strconv.Atoi(trimmedDieCode); err == nil {
 		return NormalDie(num), nil
 	}
 
 	// Is it a Fate/Fudge die roll?
-	if strings.ToUpper(dieCode) == "F" {
+	if trimmedDieCode == "F" {
 		return FateDie(0), nil
 	}
 
