@@ -37,10 +37,9 @@ func NewParser(r io.Reader) *Parser {
 }
 
 // Parse parses a SQL SELECT statement.
-func (p *Parser) Parse() (stmt *DiceRollStmt, err error) {
-	stmt = &DiceRollStmt{}
-
-	// First token should be a NUM or a DIE
+func (p *Parser) Parse() (roll Roll, err error) {
+	return
+	/*// First token should be a NUM or a DIE
 	tok, lit := p.scanIgnoreWhitespace()
 	if tok != tNUM && tok != tDIE {
 		return nil, ErrUnexpectedToken(lit)
@@ -88,7 +87,7 @@ func (p *Parser) Parse() (stmt *DiceRollStmt, err error) {
 		// Add to statement modifer
 		mod, _ := strconv.Atoi(lit)
 		stmt.Modifier += mod * mult
-	}
+	}*/
 }
 
 func (p *Parser) parseDie(dieCode string) (Die, error) {

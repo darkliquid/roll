@@ -10,13 +10,13 @@ import (
 func TestParser_ParseStatement(t *testing.T) {
 	var tests = []struct {
 		s    string
-		stmt *DiceRollStmt
+		roll Roll
 		err  string
 	}{
 		// Simple roll
 		{
 			s: `3d6`,
-			stmt: &DiceRollStmt{
+			roll: &DiceRoll{
 				Multiplier: 3,
 				Die:        NormalDie(6),
 				Modifier:   0,
@@ -26,7 +26,7 @@ func TestParser_ParseStatement(t *testing.T) {
 		// Fate roll statement
 		{
 			s: `4dF`,
-			stmt: &DiceRollStmt{
+			roll: &DiceRoll{
 				Multiplier: 4,
 				Die:        FateDie(0),
 				Modifier:   0,
@@ -36,7 +36,7 @@ func TestParser_ParseStatement(t *testing.T) {
 		// Simple roll with modifier
 		{
 			s: `3d6+4`,
-			stmt: &DiceRollStmt{
+			roll: &DiceRoll{
 				Multiplier: 3,
 				Die:        NormalDie(6),
 				Modifier:   4,
@@ -46,7 +46,7 @@ func TestParser_ParseStatement(t *testing.T) {
 		// Fate roll with modifier
 		{
 			s: `3dF+4`,
-			stmt: &DiceRollStmt{
+			roll: &DiceRoll{
 				Multiplier: 3,
 				Die:        FateDie(0),
 				Modifier:   4,
@@ -56,7 +56,7 @@ func TestParser_ParseStatement(t *testing.T) {
 		// Simple roll with multiple modifiers
 		{
 			s: `3d6+4-1+6-3`,
-			stmt: &DiceRollStmt{
+			roll: &DiceRoll{
 				Multiplier: 3,
 				Die:        NormalDie(6),
 				Modifier:   6,
@@ -66,7 +66,7 @@ func TestParser_ParseStatement(t *testing.T) {
 		// Simple roll with no multiplier
 		{
 			s: `d6`,
-			stmt: &DiceRollStmt{
+			roll: &DiceRoll{
 				Multiplier: 1,
 				Die:        NormalDie(6),
 				Modifier:   0,
@@ -81,11 +81,11 @@ func TestParser_ParseStatement(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		stmt, err := NewParser(strings.NewReader(tt.s)).Parse()
+		roll, err := NewParser(strings.NewReader(tt.s)).Parse()
 		if !reflect.DeepEqual(tt.err, errstring(err)) {
 			t.Errorf("%d. %q: error mismatch:\n  exp=%s\n  got=%s\n\n", i, tt.s, tt.err, err)
-		} else if tt.err == "" && !reflect.DeepEqual(tt.stmt, stmt) {
-			t.Errorf("%d. %q\n\nstmt mismatch:\n\nexp=%#v\n\ngot=%#v\n\n", i, tt.s, tt.stmt, stmt)
+		} else if tt.err == "" && !reflect.DeepEqual(tt.roll, roll) {
+			t.Errorf("%d. %q\n\nroll mismatch:\n\nexp=%#v\n\ngot=%#v\n\n", i, tt.s, tt.roll, roll)
 		}
 	}
 }

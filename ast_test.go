@@ -7,7 +7,7 @@ import (
 )
 
 // Ensure the dice roll statement can get results correctly
-func TestDiceRollStmt_Roll(t *testing.T) {
+func TestDiceRoll_Roll(t *testing.T) {
 	var tests = []struct {
 		seed int64
 		die  Die
@@ -27,14 +27,14 @@ func TestDiceRollStmt_Roll(t *testing.T) {
 
 	for i, tt := range tests {
 		rand.Seed(tt.seed)
-		stmt := &DiceRollStmt{
+		stmt := &DiceRoll{
 			Multiplier: tt.mux,
 			Die:        tt.die,
 			Modifier:   tt.mod,
 		}
 		rolls := stmt.Roll()
-		results := make([]int, len(rolls))
-		for i, v := range rolls {
+		results := make([]int, len(rolls.Results))
+		for i, v := range rolls.Results {
 			results[i] = v.Result
 		}
 
@@ -45,7 +45,7 @@ func TestDiceRollStmt_Roll(t *testing.T) {
 }
 
 // Ensure the dice roll statement can be represented as a string
-func TestDiceRollStmt_String(t *testing.T) {
+func TestDiceRoll_String(t *testing.T) {
 	var tests = []struct {
 		seed int64
 		die  Die
@@ -71,7 +71,7 @@ func TestDiceRollStmt_String(t *testing.T) {
 
 	for i, tt := range tests {
 		rand.Seed(tt.seed)
-		stmt := &DiceRollStmt{
+		stmt := &DiceRoll{
 			Multiplier: tt.mux,
 			Die:        tt.die,
 			Modifier:   tt.mod,

@@ -1,7 +1,6 @@
 package roll
 
 import (
-	"fmt"
 	"io"
 	"strings"
 )
@@ -13,7 +12,7 @@ func ParseString(rollStr string) (string, error) {
 
 // Parse reads from an io.Reader and generates a dice roll result string
 func Parse(r io.Reader) (string, error) {
-	parser := NewParser(r)
+	/*parser := NewParser(r)
 	stmt, err := parser.Parse()
 	if err != nil {
 		return "", err
@@ -29,5 +28,6 @@ func Parse(r io.Reader) (string, error) {
 	}
 
 	output = strings.TrimSuffix(output, ", ") + " for a total of %d"
-	return fmt.Sprintf(output, total+stmt.Modifier), nil
+	return fmt.Sprintf(output, total+stmt.Modifier), nil*/
+	return "", nil
 }
