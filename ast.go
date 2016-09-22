@@ -107,17 +107,17 @@ type Result struct {
 }
 
 // Len is the number of results
-func (r Result) Len() int {
+func (r *Result) Len() int {
 	return len(r.Results)
 }
 
 // Less return true if DieRoll at index i is less than the one at index j
-func (r Result) Less(i, j int) bool {
+func (r *Result) Less(i, j int) bool {
 	return r.Results[i].Result < r.Results[j].Result
 }
 
 // Swap swaps the DieRoll at index i with the one at index j
-func (r Result) Swap(i, j int) {
+func (r *Result) Swap(i, j int) {
 	r.Results[i], r.Results[j] = r.Results[j], r.Results[i]
 }
 
@@ -192,67 +192,20 @@ func (dr *DiceRoll) Roll() (result Result) {
 	}
 
 	// 4. Check results and apply limit operation
-	if dr.Limit != nil {
-		var rolls Result
-		rolls.Results = result.Results[:]
-
-		// Sort our tmp result copy
-		sort.Sort(rolls)
-
-		// Work out limit
-		limit := dr.Limit.Amount
-		if limit > len(rolls.Results) {
-			limit = len(rolls.Results)
-		}
-
-		switch dr.Limit.Type {
-		case KeepHighest:
-			result.Results = rolls.Results[len(rolls.Results)-limit:]
-		case KeepLowest:
-			result.Results = rolls.Results[:limit]
-		case DropHighest:
-			result.Results = rolls.Results[:len(rolls.Results)-limit]
-		case DropLowest:
-			result.Results = rolls.Results[limit:]
-		}
-	}
+	applyLimit(dr.Limit, &result)
 
 	// 5. If success op set, add modifier to each result and add successes for each match
-	if dr.Success != nil {
-		for _, roll := range result.Results {
-			if dr.Success.Match(roll.Result + dr.Modifier) {
-				result.Successes++
-			}
-		}
-	}
+	applySuccess(dr.Success, dr.Modifier, &result)
 
 	// 6. If failure op set, add modifier to each result and subtract successes for each match
-	if dr.Failure != nil {
-		for _, roll := range result.Results {
-			if dr.Failure.Match(roll.Result + dr.Modifier) {
-				result.Successes--
-			}
-		}
-	}
+	applyFailure(dr.Failure, dr.Modifier, &result)
 
 	// 7. If sort op set, sort results
-	if dr.Sort != nil {
-		switch *dr.Sort {
-		case Ascending:
-			sort.Sort(result)
-		case Descending:
-			sort.Sort(sort.Reverse(result))
-		}
-	}
+	applySort(dr.Sort, &result)
 
 	// 8. If success and failure ops not set, add modifier to total result
-	if dr.Success == nil && dr.Failure == nil {
-		for _, roll := range result.Results {
-			result.Total += roll.Result
-		}
-		result.Total += dr.Modifier
-		result.Total *= totalMultiplier
-	}
+	finaliseTotals(dr.Success, dr.Failure, dr.Modifier, totalMultiplier, &result)
+
 	return
 }
 
@@ -275,15 +228,38 @@ func (dr *DiceRoll) String() string {
 type GroupedRoll struct {
 	Rolls    []Roll
 	Modifier int
-	Limit    LimitOp
-	Success  ComparisonOp
-	Failure  ComparisonOp
+	Limit    *LimitOp
+	Success  *ComparisonOp
+	Failure  *ComparisonOp
+	Combined bool
 }
 
 // Roll gets the results of rolling the dice that make up a dice roll
 func (gr *GroupedRoll) Roll() (result Result) {
 	// 1. Generate results for each roll
-	// 2.
+	for _, roll := range gr.Rolls {
+		if gr.Combined {
+			// 2. If combined, merge all roll results into one result set
+			result.Results = append(result.Results, roll.Roll().Results...)
+		} else {
+			// 3. If not combined, make new result set out of the totals for each roll
+			total := roll.Roll().Total
+			result.Results = append(result.Results, DieRoll{total, strconv.Itoa(total)})
+		}
+	}
+
+	// 4. If limit set, apply limit operation to results
+	applyLimit(gr.Limit, &result)
+
+	// 5. If Success set, apply success op to results
+	applySuccess(gr.Success, gr.Modifier, &result)
+
+	// 6. If Failure set, apply failure op to results
+	applyFailure(gr.Failure, gr.Modifier, &result)
+
+	// 7. Add modifier or tally successes
+	finaliseTotals(gr.Success, gr.Failure, gr.Modifier, 1, &result)
+
 	return result
 }
 
@@ -295,7 +271,85 @@ func (gr *GroupedRoll) String() string {
 	}
 	parts = append(parts, "}")
 
-	output := strings.Join(parts, ", ")
+	sep := ", "
+	if gr.Combined {
+		sep = "+"
+	}
+
+	output := strings.Join(parts, sep)
+	if gr.Combined {
+		output = strings.Replace(output, "+-", "-", -1)
+	}
 
 	return output
+}
+
+func applyLimit(limitOp *LimitOp, result *Result) {
+	if limitOp != nil {
+		var rolls Result
+		rolls.Results = result.Results[:]
+
+		// Sort our tmp result copy
+		sort.Sort(&rolls)
+
+		// Work out limit
+		limit := limitOp.Amount
+		if limit > len(rolls.Results) {
+			limit = len(rolls.Results)
+		}
+
+		switch limitOp.Type {
+		case KeepHighest:
+			result.Results = rolls.Results[len(rolls.Results)-limit:]
+		case KeepLowest:
+			result.Results = rolls.Results[:limit]
+		case DropHighest:
+			result.Results = rolls.Results[:len(rolls.Results)-limit]
+		case DropLowest:
+			result.Results = rolls.Results[limit:]
+		}
+	}
+}
+
+func applySuccess(successOp *ComparisonOp, modifier int, result *Result) {
+	if successOp != nil {
+		for _, roll := range result.Results {
+			if successOp.Match(roll.Result + modifier) {
+				result.Successes++
+			}
+		}
+	}
+}
+
+func applyFailure(failureOp *ComparisonOp, modifier int, result *Result) {
+	if failureOp != nil {
+		for _, roll := range result.Results {
+			if failureOp.Match(roll.Result + modifier) {
+				result.Successes--
+			}
+		}
+	}
+}
+
+func applySort(sortType *SortType, result *Result) {
+	if sortType != nil {
+		switch *sortType {
+		case Ascending:
+			sort.Sort(result)
+		case Descending:
+			sort.Sort(sort.Reverse(result))
+		}
+	}
+}
+
+func finaliseTotals(successOp, failureOp *ComparisonOp, modifier, multiplier int, result *Result) {
+	if successOp == nil && failureOp == nil {
+		for _, roll := range result.Results {
+			result.Total += roll.Result
+		}
+		result.Total += modifier
+		result.Total *= multiplier
+	} else {
+		result.Total = result.Successes
+	}
 }
