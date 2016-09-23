@@ -87,8 +87,10 @@ type RerollOp struct {
 type SortType int
 
 const (
+	// Unsorted doesn't sort dice rolls
+	Unsorted SortType = iota
 	// Ascending sorts dice rolls from lowest to highest
-	Ascending SortType = iota
+	Ascending
 	// Descending sorts dice rolls from highest to lowest
 	Descending
 )
@@ -131,7 +133,7 @@ type DiceRoll struct {
 	Success    *ComparisonOp
 	Failure    *ComparisonOp
 	Rerolls    []RerollOp
-	Sort       *SortType
+	Sort       SortType
 }
 
 // Roll gets the results of rolling the dice that make up a dice roll
@@ -151,12 +153,16 @@ func (dr *DiceRoll) Roll() (result Result) {
 	}
 
 	// 2. For each result, check reroll criteria and reroll if a match
-	for _, reroll := range dr.Rerolls {
-		for i, roll := range result.Results {
+	for i, roll := range result.Results {
+	RerollOnce:
+		for _, reroll := range dr.Rerolls {
 			for reroll.Match(roll.Result) {
 				roll = dr.Die.Roll()
+				result.Results[i] = roll
+				if reroll.Once {
+					break RerollOnce
+				}
 			}
-			result.Results[i] = roll
 		}
 	}
 
@@ -165,7 +171,7 @@ func (dr *DiceRoll) Roll() (result Result) {
 		switch dr.Exploding.Type {
 		case Exploding:
 			for _, roll := range result.Results {
-				if dr.Exploding.Match(roll.Result) {
+				for dr.Exploding.Match(roll.Result) {
 					roll = dr.Die.Roll()
 					result.Results = append(result.Results, roll)
 				}
@@ -181,11 +187,12 @@ func (dr *DiceRoll) Roll() (result Result) {
 			result.Results = append(result.Results, DieRoll{compound, strconv.Itoa(compound)})
 		case Penetrating:
 			for _, roll := range result.Results {
-				if dr.Exploding.Match(roll.Result) {
+				for dr.Exploding.Match(roll.Result) {
 					roll = dr.Die.Roll()
-					roll.Result--
-					roll.Symbol = strconv.Itoa(roll.Result)
-					result.Results = append(result.Results, roll)
+					newroll := roll
+					newroll.Result--
+					newroll.Symbol = strconv.Itoa(newroll.Result)
+					result.Results = append(result.Results, newroll)
 				}
 			}
 		}
@@ -300,14 +307,32 @@ func applyLimit(limitOp *LimitOp, result *Result) {
 
 		switch limitOp.Type {
 		case KeepHighest:
-			result.Results = rolls.Results[len(rolls.Results)-limit:]
+			rolls.Results = rolls.Results[len(rolls.Results)-limit:]
 		case KeepLowest:
-			result.Results = rolls.Results[:limit]
+			rolls.Results = rolls.Results[:limit]
 		case DropHighest:
-			result.Results = rolls.Results[:len(rolls.Results)-limit]
+			rolls.Results = rolls.Results[:len(rolls.Results)-limit]
 		case DropLowest:
-			result.Results = rolls.Results[limit:]
+			rolls.Results = rolls.Results[limit:]
 		}
+
+		m := make(map[int]int, len(rolls.Results))
+		for _, r := range rolls.Results {
+			m[r.Result]++
+		}
+
+		newResults := make([]DieRoll, 0, len(rolls.Results))
+		for _, a := range result.Results {
+			if b, ok := m[a.Result]; ok {
+				newResults = append([]DieRoll{a}, newResults...)
+				b--
+				if b == 0 {
+					delete(m, a.Result)
+				}
+			}
+		}
+
+		result.Results = newResults
 	}
 }
 
@@ -331,14 +356,14 @@ func applyFailure(failureOp *ComparisonOp, modifier int, result *Result) {
 	}
 }
 
-func applySort(sortType *SortType, result *Result) {
-	if sortType != nil {
-		switch *sortType {
-		case Ascending:
-			sort.Sort(result)
-		case Descending:
-			sort.Sort(sort.Reverse(result))
-		}
+func applySort(sortType SortType, result *Result) {
+	switch sortType {
+	case Unsorted:
+		return
+	case Ascending:
+		sort.Sort(result)
+	case Descending:
+		sort.Sort(sort.Reverse(result))
 	}
 }
 
