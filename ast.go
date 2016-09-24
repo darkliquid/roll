@@ -39,6 +39,20 @@ func (op ComparisonOp) Match(val int) bool {
 	return false
 }
 
+// String returns the string representation of the comparison operator
+func (op ComparisonOp) String() string {
+	switch op.Type {
+	case Equals:
+		return fmt.Sprintf("=%d", op.Value)
+	case GreaterThan:
+		return fmt.Sprintf(">%d", op.Value)
+	case LessThan:
+		return fmt.Sprintf("<%d", op.Value)
+	}
+
+	return ""
+}
+
 // ExplodingType is the type of exploding die
 type ExplodingType int
 
@@ -55,6 +69,20 @@ const (
 type ExplodingOp struct {
 	ComparisonOp
 	Type ExplodingType
+}
+
+// String returns the string representation of the exploding dice operation
+func (e ExplodingOp) String() (output string) {
+	switch e.Type {
+	case Exploding:
+		output = "!"
+	case Compounded:
+		output = "!!"
+	case Penetrating:
+		output = "!p"
+	}
+
+	return output + strings.TrimPrefix(e.ComparisonOp.String(), "=")
 }
 
 // LimitType is the type of roll limitation
@@ -77,14 +105,53 @@ type LimitOp struct {
 	Type   LimitType
 }
 
+func (op LimitOp) String() string {
+	switch op.Type {
+	case KeepHighest:
+		return fmt.Sprintf("kh%d", op.Amount)
+	case KeepLowest:
+		return fmt.Sprintf("kl%d", op.Amount)
+	case DropHighest:
+		return fmt.Sprintf("dh%d", op.Amount)
+	case DropLowest:
+		return fmt.Sprintf("dl%d", op.Amount)
+	}
+
+	return ""
+}
+
 // RerollOp is the operation that defines how dice are rerolled
 type RerollOp struct {
 	ComparisonOp
 	Once bool
 }
 
+// String returns the string representation of the exploding dice operation
+func (e RerollOp) String() (output string) {
+	output = "r"
+	if e.Once {
+		output = "ro"
+	}
+
+	return output + strings.TrimPrefix(e.ComparisonOp.String(), "=")
+}
+
 // SortType is the type of sorting to use for dice roll results
 type SortType int
+
+// String return the string representation of a SortType value
+func (t SortType) String() string {
+	switch t {
+	case Unsorted:
+		return ""
+	case Ascending:
+		return "s"
+	case Descending:
+		return "sd"
+	}
+
+	return ""
+}
 
 const (
 	// Unsorted doesn't sort dice rolls
@@ -219,15 +286,42 @@ func (dr *DiceRoll) Roll() (result Result) {
 // String represents the dice roll as a string
 func (dr *DiceRoll) String() string {
 	var output string
-	if dr.Multiplier > 1 {
-		output += fmt.Sprintf("%d", dr.Multiplier)
+	if dr.Multiplier > 1 || dr.Multiplier < -1 {
+		output += fmt.Sprintf("%+d", dr.Multiplier)
+	} else if dr.Multiplier == -1 {
+		output += "-"
+	} else if dr.Multiplier == 1 {
+		output += "+"
 	}
 
 	output += dr.Die.String()
 
+	for _, r := range dr.Rerolls {
+		output += r.String()
+	}
+
+	if dr.Exploding != nil {
+		output += (*dr.Exploding).String()
+	}
+
+	if dr.Limit != nil {
+		output += (*dr.Limit).String()
+	}
+
+	if dr.Success != nil {
+		output += (*dr.Success).String()
+	}
+
+	if dr.Failure != nil {
+		output += "f" + (*dr.Failure).String()
+	}
+
+	output += dr.Sort.String()
+
 	if dr.Modifier != 0 {
 		output += fmt.Sprintf("%+d", dr.Modifier)
 	}
+
 	return output
 }
 

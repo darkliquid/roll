@@ -468,22 +468,376 @@ func TestDiceRoll_String(t *testing.T) {
 		die  Die
 		mux  int
 		mod  int
+		exp  *ExplodingOp
+		lmt  *LimitOp
+		succ *ComparisonOp
+		fail *ComparisonOp
+		roll []RerollOp
+		sort SortType
 		res  string
 	}{
 		// Fate rolls
-		{seed: 0, die: FateDie(0), mux: 4, mod: 2, res: `4dF+2`},
+		{seed: 0, die: FateDie(0), mux: 4, mod: 2, res: `+4dF+2`},
 
 		// Normal Die (3)
-		{seed: 1, die: NormalDie(3), mux: 3, mod: 8, res: `3d3+8`},
+		{seed: 1, die: NormalDie(3), mux: 3, mod: 8, res: `+3d3+8`},
 
 		// Normal Die (6)
-		{seed: 2, die: NormalDie(6), mux: 2, mod: -2, res: `2d6-2`},
+		{seed: 2, die: NormalDie(6), mux: 2, mod: -2, res: `+2d6-2`},
 
 		// Normal Die (6), no modifier
-		{seed: 2, die: NormalDie(6), mux: 2, mod: 0, res: `2d6`},
+		{seed: 2, die: NormalDie(6), mux: 2, mod: 0, res: `+2d6`},
 
 		// Normal Die (20), no multiplier
-		{seed: 2, die: NormalDie(20), mux: 1, mod: 2, res: `d20+2`},
+		{seed: 2, die: NormalDie(20), mux: 1, mod: 2, res: `+d20+2`},
+
+		// Normal Die (20), negative 1x multiplier
+		{seed: 2, die: NormalDie(20), mux: -1, mod: 2, res: `-d20+2`},
+
+		// Normal Die (6), negative multiplier
+		{seed: 2, die: NormalDie(6), mux: -2, mod: -2, res: `-2d6-2`},
+
+		// Exploding Die (6) on 5s
+		{
+			die: NormalDie(6),
+			mux: 2,
+			exp: &ExplodingOp{
+				Type: Exploding,
+				ComparisonOp: ComparisonOp{
+					Type:  Equals,
+					Value: 5,
+				},
+			},
+			res: "+2d6!5",
+		},
+
+		// Exploding Die (6) on >1s
+		{
+			die: NormalDie(6),
+			mux: 2,
+			exp: &ExplodingOp{
+				Type: Exploding,
+				ComparisonOp: ComparisonOp{
+					Type:  GreaterThan,
+					Value: 1,
+				},
+			},
+			res: "+2d6!>1",
+		},
+
+		// Exploding Die (6) on <2s
+		{
+			die: NormalDie(6),
+			mux: 2,
+			exp: &ExplodingOp{
+				Type: Exploding,
+				ComparisonOp: ComparisonOp{
+					Type:  LessThan,
+					Value: 2,
+				},
+			},
+			res: "+2d6!<2",
+		},
+
+		// Compounded Die (6) on 5s
+		{
+			die: NormalDie(6),
+			mux: 2,
+			exp: &ExplodingOp{
+				Type: Compounded,
+				ComparisonOp: ComparisonOp{
+					Type:  Equals,
+					Value: 5,
+				},
+			},
+			res: "+2d6!!5",
+		},
+
+		// Compounded Die (6) on >1s
+		{
+			die: NormalDie(6),
+			mux: 2,
+			exp: &ExplodingOp{
+				Type: Compounded,
+				ComparisonOp: ComparisonOp{
+					Type:  GreaterThan,
+					Value: 1,
+				},
+			},
+			res: "+2d6!!>1",
+		},
+
+		// Compounded Die (6) on <2s
+		{
+			die: NormalDie(6),
+			mux: 2,
+			exp: &ExplodingOp{
+				Type: Compounded,
+				ComparisonOp: ComparisonOp{
+					Type:  LessThan,
+					Value: 2,
+				},
+			},
+			res: "+2d6!!<2",
+		},
+
+		// Penetrating Die (6) on 5s
+		{
+			die: NormalDie(6),
+			mux: 2,
+			exp: &ExplodingOp{
+				Type: Penetrating,
+				ComparisonOp: ComparisonOp{
+					Type:  Equals,
+					Value: 5,
+				},
+			},
+			res: "+2d6!p5",
+		},
+
+		// Penetrating Die (6) on >1s
+		{
+			die: NormalDie(6),
+			mux: 2,
+			exp: &ExplodingOp{
+				Type: Penetrating,
+				ComparisonOp: ComparisonOp{
+					Type:  GreaterThan,
+					Value: 1,
+				},
+			},
+			res: "+2d6!p>1",
+		},
+
+		// Penetrating Die (6) on <2s
+		{
+			die: NormalDie(6),
+			mux: 2,
+			exp: &ExplodingOp{
+				Type: Penetrating,
+				ComparisonOp: ComparisonOp{
+					Type:  LessThan,
+					Value: 2,
+				},
+			},
+			res: "+2d6!p<2",
+		},
+
+		// Limit (6) to the highest 3
+		{
+			seed: 2,
+			die:  NormalDie(6),
+			mux:  4,
+			lmt: &LimitOp{
+				Type:   KeepHighest,
+				Amount: 3,
+			},
+			res: "+4d6kh3",
+		},
+
+		// Limit (6) to the lowest 3
+		{
+			die: NormalDie(6),
+			mux: 4,
+			lmt: &LimitOp{
+				Type:   KeepLowest,
+				Amount: 3,
+			},
+			res: "+4d6kl3",
+		},
+
+		// Limit (6) and drop lowest 3
+		{
+			die: NormalDie(6),
+			mux: 4,
+			lmt: &LimitOp{
+				Type:   DropLowest,
+				Amount: 3,
+			},
+			res: "+4d6dl3",
+		},
+
+		// Limit (6) and drop highest 3
+		{
+			die: NormalDie(6),
+			mux: 4,
+			lmt: &LimitOp{
+				Type:   DropHighest,
+				Amount: 3,
+			},
+			res: "+4d6dh3",
+		},
+
+		// Reroll (6) on a 1
+		{
+			die: NormalDie(6),
+			mux: 4,
+			roll: []RerollOp{
+				RerollOp{
+					ComparisonOp: ComparisonOp{
+						Type:  Equals,
+						Value: 1,
+					},
+					Once: false,
+				},
+			},
+			res: "+4d6r1",
+		},
+
+		// Reroll (6) on values > 4
+		{
+			die: NormalDie(6),
+			mux: 4,
+			roll: []RerollOp{
+				RerollOp{
+					ComparisonOp: ComparisonOp{
+						Type:  GreaterThan,
+						Value: 4,
+					},
+					Once: false,
+				},
+			},
+			res: "+4d6r>4",
+		},
+
+		// Reroll (6) on values < 3
+		{
+			die: NormalDie(6),
+			mux: 4,
+			roll: []RerollOp{
+				RerollOp{
+					ComparisonOp: ComparisonOp{
+						Type:  LessThan,
+						Value: 3,
+					},
+					Once: false,
+				},
+			},
+			res: "+4d6r<3",
+		},
+
+		// Reroll (6) on values < 4, but once only
+		{
+			die: NormalDie(6),
+			mux: 4,
+			roll: []RerollOp{
+				RerollOp{
+					ComparisonOp: ComparisonOp{
+						Type:  LessThan,
+						Value: 4,
+					},
+					Once: true,
+				},
+			},
+			res: "+4d6ro<4",
+		},
+
+		// Reroll (6) on 1s and 2s, but once only
+		{
+			die: NormalDie(6),
+			mux: 4,
+			roll: []RerollOp{
+				RerollOp{
+					ComparisonOp: ComparisonOp{
+						Type:  Equals,
+						Value: 1,
+					},
+					Once: true,
+				},
+				RerollOp{
+					ComparisonOp: ComparisonOp{
+						Type:  Equals,
+						Value: 2,
+					},
+					Once: true,
+				},
+			},
+			res: "+4d6ro1ro2",
+		},
+
+		// Normal Die (3) sorted ascending
+		{die: NormalDie(3), mux: 3, res: "+3d3s", sort: Ascending},
+
+		// Normal Die (3) sorted descending
+		{die: NormalDie(3), mux: 3, res: "+3d3sd", sort: Descending},
+
+		// Normal Die (6) successes on 6s
+		{
+			die: NormalDie(6),
+			mux: 3,
+			res: "+3d6=6",
+			succ: &ComparisonOp{
+				Type:  Equals,
+				Value: 6,
+			},
+		},
+
+		// Normal Die (6) successes on <5
+		{
+			die: NormalDie(6),
+			mux: 3,
+			res: "+3d6<5",
+			succ: &ComparisonOp{
+				Type:  LessThan,
+				Value: 5,
+			},
+		},
+
+		// Normal Die (6) successes on >3
+		{
+			die: NormalDie(6),
+			mux: 3,
+			res: "+3d6>3",
+			succ: &ComparisonOp{
+				Type:  GreaterThan,
+				Value: 3,
+			},
+		},
+
+		// Normal Die (6) successes on 6s, failures on 4s
+		{
+			die: NormalDie(6),
+			mux: 3,
+			res: "+3d6=6f=4",
+			succ: &ComparisonOp{
+				Type:  Equals,
+				Value: 6,
+			},
+			fail: &ComparisonOp{
+				Type:  Equals,
+				Value: 4,
+			},
+		},
+
+		// Normal Die (6) successes on <5, failures on >5
+		{
+			die: NormalDie(6),
+			mux: 3,
+			res: "+3d6<5f>5",
+			succ: &ComparisonOp{
+				Type:  LessThan,
+				Value: 5,
+			},
+			fail: &ComparisonOp{
+				Type:  GreaterThan,
+				Value: 5,
+			},
+		},
+
+		// Normal Die (6) successes on >4, failures <5
+		{
+			die: NormalDie(6),
+			mux: 3,
+			res: "+3d6>4f<5",
+			succ: &ComparisonOp{
+				Type:  GreaterThan,
+				Value: 4,
+			},
+			fail: &ComparisonOp{
+				Type:  LessThan,
+				Value: 5,
+			},
+		},
 	}
 
 	for i, tt := range tests {
@@ -492,6 +846,12 @@ func TestDiceRoll_String(t *testing.T) {
 			Multiplier: tt.mux,
 			Die:        tt.die,
 			Modifier:   tt.mod,
+			Exploding:  tt.exp,
+			Rerolls:    tt.roll,
+			Success:    tt.succ,
+			Failure:    tt.fail,
+			Sort:       tt.sort,
+			Limit:      tt.lmt,
 		}
 		if stmt.String() != tt.res {
 			t.Errorf("%d. result mismatch: exp=%v got=%v", i, tt.res, stmt.String())
