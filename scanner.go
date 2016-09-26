@@ -33,6 +33,16 @@ func isModifier(ch rune) bool {
 	return ch == '+' || ch == '-'
 }
 
+// Return true if ch is an exploding character
+func isExploding(ch rune) bool {
+	return ch == '!'
+}
+
+// Return true if ch is a reroll character
+func isReroll(ch rune) bool {
+	return ch == 'r'
+}
+
 // Scanner is our lexical scanner for dice roll strings
 type Scanner struct {
 	r *bufio.Reader
@@ -158,13 +168,13 @@ func (s *Scanner) scanDieOrDrop() (tok Token, lit string) {
 		} else if tok == tDIE && ch == 'h' {
 			tok = tDROPHIGH
 		} else if tok == tDIE && !isNumber(ch) && !isDieChar(ch) {
-			if !isCompare(ch) && !isModifier(ch) && ch != 'd' && ch != 'D' {
+			if !isReroll(ch) && !isExploding(ch) && !isCompare(ch) && !isModifier(ch) && ch != 'd' && ch != 'D' {
 				_, _ = buf.WriteRune(ch)
 			}
 			s.unread()
 			break
 		} else if tok != tDIE && !isNumber(ch) {
-			if !isCompare(ch) && !isModifier(ch) && ch != 'd' && ch != 'D' {
+			if !isReroll(ch) && !isExploding(ch) && !isCompare(ch) && !isModifier(ch) && ch != 'd' && ch != 'D' {
 				_, _ = buf.WriteRune(ch)
 			}
 			s.unread()

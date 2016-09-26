@@ -39,7 +39,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  2,
 			exp: &ExplodingOp{
 				Type: Exploding,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  Equals,
 					Value: 5,
 				},
@@ -55,7 +55,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  2,
 			exp: &ExplodingOp{
 				Type: Exploding,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  GreaterThan,
 					Value: 1,
 				},
@@ -71,7 +71,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  2,
 			exp: &ExplodingOp{
 				Type: Exploding,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  LessThan,
 					Value: 2,
 				},
@@ -87,7 +87,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  2,
 			exp: &ExplodingOp{
 				Type: Compounded,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  Equals,
 					Value: 5,
 				},
@@ -103,7 +103,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  2,
 			exp: &ExplodingOp{
 				Type: Compounded,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  GreaterThan,
 					Value: 1,
 				},
@@ -119,7 +119,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  2,
 			exp: &ExplodingOp{
 				Type: Compounded,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  LessThan,
 					Value: 2,
 				},
@@ -135,7 +135,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  2,
 			exp: &ExplodingOp{
 				Type: Penetrating,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  Equals,
 					Value: 5,
 				},
@@ -151,7 +151,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  2,
 			exp: &ExplodingOp{
 				Type: Penetrating,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  GreaterThan,
 					Value: 1,
 				},
@@ -167,7 +167,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  2,
 			exp: &ExplodingOp{
 				Type: Penetrating,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  LessThan,
 					Value: 2,
 				},
@@ -235,7 +235,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  4,
 			roll: []RerollOp{
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  Equals,
 						Value: 1,
 					},
@@ -253,7 +253,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  4,
 			roll: []RerollOp{
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  GreaterThan,
 						Value: 4,
 					},
@@ -271,7 +271,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  4,
 			roll: []RerollOp{
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  LessThan,
 						Value: 3,
 					},
@@ -289,7 +289,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  4,
 			roll: []RerollOp{
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  LessThan,
 						Value: 4,
 					},
@@ -307,14 +307,14 @@ func TestDiceRoll_Roll(t *testing.T) {
 			mux:  4,
 			roll: []RerollOp{
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  Equals,
 						Value: 1,
 					},
 					Once: true,
 				},
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  Equals,
 						Value: 2,
 					},
@@ -503,7 +503,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 2,
 			exp: &ExplodingOp{
 				Type: Exploding,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  Equals,
 					Value: 5,
 				},
@@ -517,7 +517,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 2,
 			exp: &ExplodingOp{
 				Type: Exploding,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  GreaterThan,
 					Value: 1,
 				},
@@ -531,7 +531,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 2,
 			exp: &ExplodingOp{
 				Type: Exploding,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  LessThan,
 					Value: 2,
 				},
@@ -545,7 +545,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 2,
 			exp: &ExplodingOp{
 				Type: Compounded,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  Equals,
 					Value: 5,
 				},
@@ -559,7 +559,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 2,
 			exp: &ExplodingOp{
 				Type: Compounded,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  GreaterThan,
 					Value: 1,
 				},
@@ -573,7 +573,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 2,
 			exp: &ExplodingOp{
 				Type: Compounded,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  LessThan,
 					Value: 2,
 				},
@@ -587,7 +587,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 2,
 			exp: &ExplodingOp{
 				Type: Penetrating,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  Equals,
 					Value: 5,
 				},
@@ -601,7 +601,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 2,
 			exp: &ExplodingOp{
 				Type: Penetrating,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  GreaterThan,
 					Value: 1,
 				},
@@ -615,7 +615,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 2,
 			exp: &ExplodingOp{
 				Type: Penetrating,
-				ComparisonOp: ComparisonOp{
+				ComparisonOp: &ComparisonOp{
 					Type:  LessThan,
 					Value: 2,
 				},
@@ -674,7 +674,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 4,
 			roll: []RerollOp{
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  Equals,
 						Value: 1,
 					},
@@ -690,7 +690,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 4,
 			roll: []RerollOp{
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  GreaterThan,
 						Value: 4,
 					},
@@ -706,7 +706,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 4,
 			roll: []RerollOp{
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  LessThan,
 						Value: 3,
 					},
@@ -722,7 +722,7 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 4,
 			roll: []RerollOp{
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  LessThan,
 						Value: 4,
 					},
@@ -738,14 +738,14 @@ func TestDiceRoll_String(t *testing.T) {
 			mux: 4,
 			roll: []RerollOp{
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  Equals,
 						Value: 1,
 					},
 					Once: true,
 				},
 				RerollOp{
-					ComparisonOp: ComparisonOp{
+					ComparisonOp: &ComparisonOp{
 						Type:  Equals,
 						Value: 2,
 					},

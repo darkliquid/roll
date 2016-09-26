@@ -27,7 +27,7 @@ type ComparisonOp struct {
 }
 
 // Match returns true if the given value compares positively against the op val
-func (op ComparisonOp) Match(val int) bool {
+func (op *ComparisonOp) Match(val int) bool {
 	switch op.Type {
 	case Equals:
 		return val == op.Value
@@ -40,7 +40,7 @@ func (op ComparisonOp) Match(val int) bool {
 }
 
 // String returns the string representation of the comparison operator
-func (op ComparisonOp) String() string {
+func (op *ComparisonOp) String() string {
 	switch op.Type {
 	case Equals:
 		return fmt.Sprintf("=%d", op.Value)
@@ -67,7 +67,7 @@ const (
 
 // ExplodingOp is the operation that defines how a dice roll explodes
 type ExplodingOp struct {
-	ComparisonOp
+	*ComparisonOp
 	Type ExplodingType
 }
 
@@ -122,7 +122,7 @@ func (op LimitOp) String() string {
 
 // RerollOp is the operation that defines how dice are rerolled
 type RerollOp struct {
-	ComparisonOp
+	*ComparisonOp
 	Once bool
 }
 

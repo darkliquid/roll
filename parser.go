@@ -84,27 +84,73 @@ func (p *Parser) parseDiceRoll() (roll *DiceRoll, err error) {
 		tok, lit := p.scanIgnoreWhitespace()
 
 		// Handle modifier or EOF
-		mult := 1
 		switch tok {
-		case tPLUS:
-		case tMINUS:
-			mult = -1
+		case tPLUS, tMINUS:
+			var mod int
+			mod, err = p.parseModifier(tok)
+			roll.Modifier += mod
+		case tEXPLODE, tCOMPOUND, tPENETRATE:
+			roll.Exploding, err = p.parseExplosion(tok, lit)
+		case tKEEPHIGH, tKEEPLOW, tDROPHIGH, tDROPLOW:
+			roll.Limit, err = p.parseLimit(tok, lit)
+		case tSORT:
+			switch lit {
+			case "s":
+				roll.Sort = Ascending
+			case "sd":
+				roll.Sort = Descending
+			}
+		case tREROLL:
+			var rr RerollOp
+			rr, err = p.parseReroll(lit)
+			roll.Rerolls = append(roll.Rerolls, rr)
+		case tGREATER, tLESS, tEQUAL:
+			p.unscan()
+			roll.Success, err = p.parseComparison()
+		case tFAILURES:
+			roll.Failure, err = p.parseComparison()
 		case tEOF:
 			return
 		default:
 			return nil, ErrUnexpectedToken(lit)
 		}
 
-		// Get modifer value
-		tok, lit = p.scanIgnoreWhitespace()
-		if tok != tNUM {
-			return nil, ErrUnexpectedToken(lit)
+		// If there is an error, lets bail out
+		if err != nil {
+			return nil, err
 		}
-
-		// Add to statement modifer
-		mod, _ := strconv.Atoi(lit)
-		roll.Modifier += mod * mult
 	}
+}
+
+func (p *Parser) parseReroll(lit string) (rr RerollOp, err error) {
+	if lit == "ro" {
+		rr.Once = true
+	}
+
+	// determine the comparison operator for the reroll op
+	compOp, err := p.parseComparison()
+	if err != nil {
+		return
+	}
+
+	rr.ComparisonOp = compOp
+	return
+}
+
+func (p *Parser) parseModifier(tok Token) (int, error) {
+	mult := 1
+	if tok == tMINUS {
+		mult = -1
+	}
+	// Get modifer value
+	tok, lit := p.scanIgnoreWhitespace()
+	if tok != tNUM {
+		return 0, ErrUnexpectedToken(lit)
+	}
+
+	// Add to statement modifer
+	mod, err := strconv.Atoi(lit)
+	return mod * mult, err
 }
 
 func (p *Parser) parseDie(dieCode string) (Die, error) {
@@ -119,6 +165,96 @@ func (p *Parser) parseDie(dieCode string) (Die, error) {
 	}
 
 	return nil, ErrUnknownDie(dieCode)
+}
+
+func (p *Parser) parseExplosion(tok Token, lit string) (*ExplodingOp, error) {
+	exp := &ExplodingOp{}
+
+	switch tok {
+	case tEXPLODE:
+		exp.Type = Exploding
+	case tCOMPOUND:
+		exp.Type = Compounded
+	case tPENETRATE:
+		exp.Type = Penetrating
+	default:
+		return nil, ErrUnexpectedToken(lit)
+	}
+
+	// determine the comparison operator for the explosion op
+	compOp, err := p.parseComparison()
+	if err != nil {
+		return nil, err
+	}
+	exp.ComparisonOp = compOp
+
+	return exp, nil
+}
+
+func (p *Parser) parseComparison() (cmp *ComparisonOp, err error) {
+	tok, lit := p.scan()
+
+	cmp = &ComparisonOp{}
+
+	switch tok {
+	case tNUM:
+		cmp.Value, err = strconv.Atoi(lit)
+		if err != nil {
+			return
+		}
+
+		cmp.Type = Equals
+		return
+	case tEQUAL:
+		cmp.Type = Equals
+	case tGREATER:
+		cmp.Type = GreaterThan
+	case tLESS:
+		cmp.Type = LessThan
+	default:
+		err = ErrUnexpectedToken(lit)
+		return
+	}
+
+	tok, lit = p.scan()
+	if tok != tNUM {
+		err = ErrUnexpectedToken(lit)
+		return
+	}
+
+	cmp.Value, err = strconv.Atoi(lit)
+	if err != nil {
+		return
+	}
+
+	return cmp, nil
+}
+
+func (p *Parser) parseLimit(tok Token, lit string) (lmt *LimitOp, err error) {
+	lmt = &LimitOp{
+		Amount: 1,
+	}
+
+	switch tok {
+	case tKEEPHIGH:
+		lmt.Type = KeepHighest
+		lit = strings.TrimPrefix(lit, "kh")
+	case tKEEPLOW:
+		lmt.Type = KeepLowest
+		lit = strings.TrimPrefix(lit, "kl")
+	case tDROPHIGH:
+		lmt.Type = DropHighest
+		lit = strings.TrimPrefix(lit, "dh")
+	case tDROPLOW:
+		lmt.Type = DropLowest
+		lit = strings.TrimPrefix(lit, "dl")
+	}
+
+	if lit != "" {
+		lmt.Amount, err = strconv.Atoi(lit)
+	}
+
+	return
 }
 
 // scan returns the next token from the underlying scanner.

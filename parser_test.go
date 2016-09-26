@@ -73,6 +73,60 @@ func TestParser_Parse(t *testing.T) {
 			},
 		},
 
+		// Multi-roll, compounded on 5s, keep top 3, sort descending, +3
+		{
+			s: `6d6!!5kh3sd+3`,
+			roll: &DiceRoll{
+				Multiplier: 6,
+				Die:        NormalDie(6),
+				Modifier:   3,
+				Sort:       Descending,
+				Limit: &LimitOp{
+					Type:   KeepHighest,
+					Amount: 3,
+				},
+				Exploding: &ExplodingOp{
+					Type: Compounded,
+					ComparisonOp: &ComparisonOp{
+						Type:  Equals,
+						Value: 5,
+					},
+				},
+			},
+		},
+
+		// Multi-roll, reroll 2s, reroll once on 4s, successes > 3, failures on 1s
+		{
+			s: `6d6r2ro4>3f=1`,
+			roll: &DiceRoll{
+				Multiplier: 6,
+				Die:        NormalDie(6),
+				Rerolls: []RerollOp{
+					RerollOp{
+						ComparisonOp: &ComparisonOp{
+							Type:  Equals,
+							Value: 2,
+						},
+					},
+					RerollOp{
+						ComparisonOp: &ComparisonOp{
+							Type:  Equals,
+							Value: 4,
+						},
+						Once: true,
+					},
+				},
+				Success: &ComparisonOp{
+					Type:  GreaterThan,
+					Value: 3,
+				},
+				Failure: &ComparisonOp{
+					Type:  Equals,
+					Value: 1,
+				},
+			},
+		},
+
 		// Errors
 		{s: `foo`, err: `found unexpected token "f"`},
 		{s: `dX`, err: `unrecognised die type "dX"`},
