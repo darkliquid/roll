@@ -36,28 +36,45 @@ func NewParser(r io.Reader) *Parser {
 	return &Parser{s: NewScanner(r)}
 }
 
-// Parse parses a SQL SELECT statement.
+// Parse parses a Roll statement.
 func (p *Parser) Parse() (roll Roll, err error) {
-	return
-	/*// First token should be a NUM or a DIE
+	// First token should be a NUM or a DIE
 	tok, lit := p.scanIgnoreWhitespace()
-	if tok != tNUM && tok != tDIE {
+
+	switch tok {
+	case tNUM, tDIE:
+		return p.parseDiceRoll()
+	case tGROUPSTART:
+		return p.parseGroupedRoll()
+	default:
 		return nil, ErrUnexpectedToken(lit)
 	}
+}
+
+// parseGrouped a GroupedRoll statement
+func (p *Parser) parseGroupedRoll() (roll *GroupedRoll, err error) {
+	return
+}
+
+// parseDiceRoll parses a DiceRoll statement
+func (p *Parser) parseDiceRoll() (roll *DiceRoll, err error) {
+	roll = &DiceRoll{}
+	tok := p.buf.tok
+	lit := p.buf.lit
 
 	// If NUM, we store it as the multiplier, else we use 1
 	if tok == tNUM {
-		stmt.Multiplier, _ = strconv.Atoi(lit)
+		roll.Multiplier, _ = strconv.Atoi(lit)
 		tok, lit = p.scanIgnoreWhitespace()
 		if tok != tDIE {
 			return nil, ErrUnexpectedToken(lit)
 		}
 	} else {
-		stmt.Multiplier = 1
+		roll.Multiplier = 1
 	}
 
 	// We will have a DIE token here, so parse it
-	if stmt.Die, err = p.parseDie(lit); err != nil {
+	if roll.Die, err = p.parseDie(lit); err != nil {
 		return nil, err
 	}
 
@@ -86,8 +103,8 @@ func (p *Parser) Parse() (roll Roll, err error) {
 
 		// Add to statement modifer
 		mod, _ := strconv.Atoi(lit)
-		stmt.Modifier += mod * mult
-	}*/
+		roll.Modifier += mod * mult
+	}
 }
 
 func (p *Parser) parseDie(dieCode string) (Die, error) {

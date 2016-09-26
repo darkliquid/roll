@@ -7,7 +7,7 @@ import (
 )
 
 // Ensure the parser can parse strings into Statement ASTs.
-func TestParser_ParseStatement(t *testing.T) {
+func TestParser_Parse(t *testing.T) {
 	var tests = []struct {
 		s    string
 		roll Roll
