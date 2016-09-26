@@ -858,3 +858,462 @@ func TestDiceRoll_String(t *testing.T) {
 		}
 	}
 }
+
+// Ensure the group dice roll statement can get results correctly
+func TestGroupedRoll_Roll(t *testing.T) {
+	var tests = []struct {
+		seed  int64
+		rolls []Roll
+		mod   int
+		lmit  *LimitOp
+		succ  *ComparisonOp
+		fail  *ComparisonOp
+		comb  bool
+		scnt  int
+		totl  int
+		res   []int
+	}{
+		// Single roll
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+			},
+			mod:  2,
+			res:  []int{8},
+			totl: 10,
+		},
+		// Combined single roll
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+			},
+			mod:  2,
+			res:  []int{5, 5, 6},
+			totl: 18,
+			comb: true,
+		},
+		// Combined multi-roll
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&DiceRoll{
+					Multiplier: 2,
+					Die:        NormalDie(4),
+					Modifier:   0,
+				},
+			},
+			mod:  0,
+			res:  []int{5, 5, 6, 3, 4},
+			totl: 23,
+			comb: true,
+		},
+		// Multi-roll with limit
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&DiceRoll{
+					Multiplier: 1,
+					Die:        NormalDie(4),
+					Modifier:   0,
+				},
+				&DiceRoll{
+					Multiplier: 2,
+					Die:        NormalDie(8),
+					Modifier:   10,
+				},
+			},
+			mod:  2,
+			res:  []int{15},
+			totl: 17,
+			lmit: &LimitOp{
+				Type:   KeepHighest,
+				Amount: 1,
+			},
+		},
+		// Multi-roll combined with limit
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&DiceRoll{
+					Multiplier: 1,
+					Die:        NormalDie(4),
+					Modifier:   0,
+				},
+				&DiceRoll{
+					Multiplier: 2,
+					Die:        NormalDie(8),
+					Modifier:   10,
+				},
+			},
+			mod:  2,
+			res:  []int{14, 11, 6, 5},
+			totl: 38,
+			comb: true,
+			lmit: &LimitOp{
+				Type:   KeepHighest,
+				Amount: 4,
+			},
+		},
+		// Multi-roll with succ/fail
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&DiceRoll{
+					Multiplier: 1,
+					Die:        NormalDie(4),
+					Modifier:   0,
+				},
+				&DiceRoll{
+					Multiplier: 2,
+					Die:        NormalDie(8),
+					Modifier:   10,
+				},
+			},
+			mod:  0,
+			res:  []int{8, 3, 15},
+			totl: 1,
+			succ: &ComparisonOp{
+				Type:  GreaterThan,
+				Value: 6,
+			},
+			fail: &ComparisonOp{
+				Type:  Equals,
+				Value: 3,
+			},
+			scnt: 1,
+		},
+		// Multi-roll combined with succ/fail
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&DiceRoll{
+					Multiplier: 1,
+					Die:        NormalDie(4),
+					Modifier:   0,
+				},
+				&DiceRoll{
+					Multiplier: 2,
+					Die:        NormalDie(8),
+					Modifier:   10,
+				},
+			},
+			mod:  0,
+			res:  []int{5, 5, 6, 3, 14, 11},
+			totl: 1,
+			comb: true,
+			succ: &ComparisonOp{
+				Type:  GreaterThan,
+				Value: 6,
+			},
+			fail: &ComparisonOp{
+				Type:  Equals,
+				Value: 3,
+			},
+			scnt: 1,
+		},
+	}
+
+	for i, tt := range tests {
+		rand.Seed(tt.seed)
+		stmt := &GroupedRoll{
+			Rolls:    tt.rolls,
+			Modifier: tt.mod,
+			Limit:    tt.lmit,
+			Success:  tt.succ,
+			Failure:  tt.fail,
+			Combined: tt.comb,
+		}
+		rolls := stmt.Roll()
+		results := make([]int, len(rolls.Results))
+		for i, v := range rolls.Results {
+			results[i] = v.Result
+		}
+
+		if !reflect.DeepEqual(tt.res, results) {
+			t.Errorf("%d. result mismatch: exp=%v got=%v", i, tt.res, results)
+		}
+
+		if tt.scnt != rolls.Successes {
+			t.Errorf("%d. successes mismatch: exp=%v got=%v", i, tt.scnt, rolls.Successes)
+		}
+
+		if tt.totl != rolls.Total {
+			t.Errorf("%d. total mismatch: exp=%v got=%v", i, tt.totl, rolls.Total)
+		}
+	}
+}
+
+// Ensure the group dice roll statement string representation is correct
+func TestGroupedRoll_String(t *testing.T) {
+	var tests = []struct {
+		seed  int64
+		rolls []Roll
+		mod   int
+		lmit  *LimitOp
+		succ  *ComparisonOp
+		fail  *ComparisonOp
+		comb  bool
+		res   string
+	}{
+		// Single roll
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+			},
+			mod: 2,
+			res: "{3d6+4,}+2",
+		},
+		// Combined single roll
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+			},
+			mod:  2,
+			res:  "{3d6+4}+2",
+			comb: true,
+		},
+		// Combined multi-roll
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&DiceRoll{
+					Multiplier: 2,
+					Die:        NormalDie(4),
+					Modifier:   0,
+				},
+			},
+			mod:  0,
+			res:  "{3d6+4 + 2d4}",
+			comb: true,
+		},
+		// Multi-roll with limit
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&DiceRoll{
+					Multiplier: 1,
+					Die:        NormalDie(4),
+					Modifier:   0,
+				},
+				&DiceRoll{
+					Multiplier: 2,
+					Die:        NormalDie(8),
+					Modifier:   10,
+				},
+			},
+			mod: 2,
+			res: "{3d6+4, d4, 2d8+10}kh1+2",
+			lmit: &LimitOp{
+				Type:   KeepHighest,
+				Amount: 1,
+			},
+		},
+		// Multi-roll combined with limit
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&DiceRoll{
+					Multiplier: 1,
+					Die:        NormalDie(4),
+					Modifier:   0,
+				},
+				&DiceRoll{
+					Multiplier: 2,
+					Die:        NormalDie(8),
+					Modifier:   10,
+				},
+			},
+			mod:  2,
+			res:  "{3d6+4 + d4 + 2d8+10}kh4+2",
+			comb: true,
+			lmit: &LimitOp{
+				Type:   KeepHighest,
+				Amount: 4,
+			},
+		},
+		// Multi-roll with succ/fail
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&DiceRoll{
+					Multiplier: 1,
+					Die:        NormalDie(4),
+					Modifier:   0,
+				},
+				&DiceRoll{
+					Multiplier: 2,
+					Die:        NormalDie(8),
+					Modifier:   10,
+				},
+			},
+			mod: 0,
+			res: "{3d6+4, d4, 2d8+10}>6f=3",
+			succ: &ComparisonOp{
+				Type:  GreaterThan,
+				Value: 6,
+			},
+			fail: &ComparisonOp{
+				Type:  Equals,
+				Value: 3,
+			},
+		},
+		// Multi-roll combined with succ/fail
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&DiceRoll{
+					Multiplier: 1,
+					Die:        NormalDie(4),
+					Modifier:   0,
+				},
+				&DiceRoll{
+					Multiplier: 2,
+					Die:        NormalDie(8),
+					Modifier:   10,
+				},
+			},
+			mod:  0,
+			res:  "{3d6+4 + d4 + 2d8+10}>6f=3",
+			comb: true,
+			succ: &ComparisonOp{
+				Type:  GreaterThan,
+				Value: 6,
+			},
+			fail: &ComparisonOp{
+				Type:  Equals,
+				Value: 3,
+			},
+		},
+		// Nested grouped roll combined
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&GroupedRoll{
+					Rolls: []Roll{
+						&DiceRoll{
+							Multiplier: 3,
+							Die:        NormalDie(6),
+							Modifier:   4,
+						},
+					},
+				},
+			},
+			mod:  2,
+			res:  "{3d6+4 + {3d6+4,}}+2",
+			comb: true,
+		},
+		// Nested grouped roll non-combined
+		{
+			seed: 0,
+			rolls: []Roll{
+				&DiceRoll{
+					Multiplier: 3,
+					Die:        NormalDie(6),
+					Modifier:   4,
+				},
+				&GroupedRoll{
+					Rolls: []Roll{
+						&DiceRoll{
+							Multiplier: 3,
+							Die:        NormalDie(6),
+							Modifier:   4,
+						},
+					},
+				},
+			},
+			mod: 2,
+			res: "{3d6+4, {3d6+4,}}+2",
+		},
+	}
+
+	for i, tt := range tests {
+		rand.Seed(tt.seed)
+		stmt := &GroupedRoll{
+			Rolls:    tt.rolls,
+			Modifier: tt.mod,
+			Limit:    tt.lmit,
+			Success:  tt.succ,
+			Failure:  tt.fail,
+			Combined: tt.comb,
+		}
+
+		if !reflect.DeepEqual(tt.res, stmt.String()) {
+			t.Errorf("%d. result mismatch: exp=%v got=%v", i, tt.res, stmt.String())
+		}
+	}
+}

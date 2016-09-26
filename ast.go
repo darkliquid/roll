@@ -341,7 +341,21 @@ func (gr *GroupedRoll) Roll() (result Result) {
 	for _, roll := range gr.Rolls {
 		if gr.Combined {
 			// 2. If combined, merge all roll results into one result set
-			result.Results = append(result.Results, roll.Roll().Results...)
+			// NOTE: in combined mode, the roll modifier is added to each result
+			var mod int
+			switch t := roll.(type) {
+			case *GroupedRoll:
+				mod = t.Modifier
+			case *DiceRoll:
+				mod = t.Modifier
+			}
+
+			for _, res := range roll.Roll().Results {
+				result.Results = append(result.Results, DieRoll{
+					res.Result + mod,
+					strconv.Itoa(res.Result + mod),
+				})
+			}
 		} else {
 			// 3. If not combined, make new result set out of the totals for each roll
 			total := roll.Roll().Total
@@ -365,21 +379,49 @@ func (gr *GroupedRoll) Roll() (result Result) {
 }
 
 // String represents the grouped roll as a string
-func (gr *GroupedRoll) String() string {
-	parts := []string{"{"}
+func (gr *GroupedRoll) String() (output string) {
+	parts := []string{}
+
 	for _, roll := range gr.Rolls {
 		parts = append(parts, roll.String())
 	}
-	parts = append(parts, "}")
 
 	sep := ", "
 	if gr.Combined {
-		sep = "+"
+		sep = " + "
 	}
 
-	output := strings.Join(parts, sep)
+	output = strings.Join(parts, sep)
 	if gr.Combined {
 		output = strings.Replace(output, "+-", "-", -1)
+	} else if len(gr.Rolls) == 1 {
+		// This case should be impossible, but we want to be able to identify
+		// it if it *does* somehow happen.
+		output += ","
+	}
+
+	output = "{" + output + "}"
+	output = strings.Replace(output, "{+", "{", -1)
+	output = strings.Replace(output, "{-", "{", -1)
+	output = strings.Replace(output, ", +", ", ", -1)
+	output = strings.Replace(output, ", -", ", ", -1)
+	output = strings.Replace(output, "+ +", "+ ", -1)
+	output = strings.Replace(output, "+ -", "- ", -1)
+
+	if gr.Limit != nil {
+		output += (*gr.Limit).String()
+	}
+
+	if gr.Success != nil {
+		output += (*gr.Success).String()
+	}
+
+	if gr.Failure != nil {
+		output += "f" + (*gr.Failure).String()
+	}
+
+	if gr.Modifier != 0 {
+		output += fmt.Sprintf("%+d", gr.Modifier)
 	}
 
 	return output
