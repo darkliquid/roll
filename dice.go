@@ -22,21 +22,24 @@ type Die interface {
 type FateDie int
 
 const (
-	FATE_BLANK = "☐"
-	FATE_MINUS = "⊟"
-	FATE_PLUS  = "⊞"
+	// FateBlank is the symbol for a blank Fate die face
+	FateBlank = "☐"
+	// FateMinus is the symbol for a minus Fate die face
+	FateMinus = "⊟"
+	// FatePlus is the symbol for a plus Fate die face
+	FatePlus = "⊞"
 )
 
 // Roll generates a random number and the appropriate symbol
 func (d FateDie) Roll() DieRoll {
 	val := rand.Intn(3) - 1
-	sym := FATE_BLANK
+	sym := FateBlank
 
 	switch val {
 	case -1:
-		sym = FATE_MINUS
+		sym = FateMinus
 	case 1:
-		sym = FATE_PLUS
+		sym = FatePlus
 	}
 
 	return DieRoll{

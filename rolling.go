@@ -19,15 +19,13 @@ func Parse(r io.Reader) (string, error) {
 		return "", err
 	}
 
-	output := fmt.Sprintf("Rolled %q and got ", stmt)
+	output := fmt.Sprintf("Rolled %q and got ", strings.TrimPrefix(stmt.String(), "+"))
 
 	results := stmt.Roll()
-	var total int
-	for _, result := range results {
-		total += result.Result
+	for _, result := range results.Results {
 		output += result.Symbol + ", "
 	}
 
 	output = strings.TrimSuffix(output, ", ") + " for a total of %d"
-	return fmt.Sprintf(output, total+stmt.Modifier), nil
+	return fmt.Sprintf(output, results.Total), nil
 }

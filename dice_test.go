@@ -14,9 +14,9 @@ func TestDie_Roll(t *testing.T) {
 		sym  string
 	}{
 		// Fate rolls
-		{seed: 2, die: FateDie(0), res: 0, sym: FATE_BLANK},
-		{seed: 1, die: FateDie(0), res: 1, sym: FATE_PLUS},
-		{seed: 0, die: FateDie(0), res: -1, sym: FATE_MINUS},
+		{seed: 2, die: FateDie(0), res: 0, sym: FateBlank},
+		{seed: 1, die: FateDie(0), res: 1, sym: FatePlus},
+		{seed: 0, die: FateDie(0), res: -1, sym: FateMinus},
 
 		// Normal Die (3)
 		{seed: 0, die: NormalDie(3), res: 1, sym: "1"},
