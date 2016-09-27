@@ -127,6 +127,82 @@ func TestParser_Parse(t *testing.T) {
 			},
 		},
 
+		// Grouped multi-roll, drop lowest, successes on 1s, fails > 5
+		{
+			s: `{3d6+4,2d8}dl=1f>5`,
+			roll: &GroupedRoll{
+				Rolls: []Roll{
+					&DiceRoll{
+						Multiplier: 3,
+						Die:        NormalDie(6),
+						Modifier:   4,
+					},
+					&DiceRoll{
+						Multiplier: 2,
+						Die:        NormalDie(8),
+					},
+				},
+				Limit: &LimitOp{
+					Amount: 1,
+					Type:   DropLowest,
+				},
+				Success: &ComparisonOp{
+					Type:  Equals,
+					Value: 1,
+				},
+				Failure: &ComparisonOp{
+					Type:  GreaterThan,
+					Value: 5,
+				},
+				Combined: false,
+			},
+		},
+
+		// Grouped combined nested multi-roll, keep high 3, succ <4, fail >3
+		{
+			s: `{3d6+2d8-{4d4-1}dl}kh3<4f>3`,
+			roll: &GroupedRoll{
+				Rolls: []Roll{
+					&DiceRoll{
+						Multiplier: 3,
+						Die:        NormalDie(6),
+					},
+					&DiceRoll{
+						Multiplier: 2,
+						Die:        NormalDie(8),
+					},
+					&GroupedRoll{
+						Rolls: []Roll{
+							&DiceRoll{
+								Multiplier: 4,
+								Die:        NormalDie(4),
+								Modifier:   -1,
+							},
+						},
+						Limit: &LimitOp{
+							Amount: 1,
+							Type:   DropLowest,
+						},
+						Combined: true,
+						Negative: true,
+					},
+				},
+				Limit: &LimitOp{
+					Amount: 3,
+					Type:   KeepHighest,
+				},
+				Success: &ComparisonOp{
+					Type:  LessThan,
+					Value: 4,
+				},
+				Failure: &ComparisonOp{
+					Type:  GreaterThan,
+					Value: 3,
+				},
+				Combined: true,
+			},
+		},
+
 		// Errors
 		{s: `foo`, err: `found unexpected token "f"`},
 		{s: `dX`, err: `unrecognised die type "dX"`},
@@ -139,7 +215,7 @@ func TestParser_Parse(t *testing.T) {
 		if !reflect.DeepEqual(tt.err, errstring(err)) {
 			t.Errorf("%d. %q: error mismatch:\n  exp=%s\n  got=%s\n\n", i, tt.s, tt.err, err)
 		} else if tt.err == "" && !reflect.DeepEqual(tt.roll, roll) {
-			t.Errorf("%d. %q\n\nroll mismatch:\n\nexp=%#v\n\ngot=%#v\n\n", i, tt.s, tt.roll, roll)
+			t.Errorf("%d. %q\n\nroll mismatch:\n\nexp=%#v (%s)\n\ngot=%#v (%s)\n\n", i, tt.s, tt.roll, tt.roll.String(), roll, roll.String())
 		}
 	}
 }

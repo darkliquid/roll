@@ -105,19 +105,23 @@ type LimitOp struct {
 	Type   LimitType
 }
 
-func (op LimitOp) String() string {
+func (op LimitOp) String() (output string) {
 	switch op.Type {
 	case KeepHighest:
-		return fmt.Sprintf("kh%d", op.Amount)
+		output = "kh"
 	case KeepLowest:
-		return fmt.Sprintf("kl%d", op.Amount)
+		output = "kl"
 	case DropHighest:
-		return fmt.Sprintf("dh%d", op.Amount)
+		output = "dh"
 	case DropLowest:
-		return fmt.Sprintf("dl%d", op.Amount)
+		output = "dl"
 	}
 
-	return ""
+	if op.Amount > 1 {
+		output += strconv.Itoa(op.Amount)
+	}
+
+	return
 }
 
 // RerollOp is the operation that defines how dice are rerolled
@@ -296,6 +300,10 @@ func (dr *DiceRoll) String() string {
 
 	output += dr.Die.String()
 
+	if dr.Modifier != 0 {
+		output += fmt.Sprintf("%+d", dr.Modifier)
+	}
+
 	for _, r := range dr.Rerolls {
 		output += r.String()
 	}
@@ -318,10 +326,6 @@ func (dr *DiceRoll) String() string {
 
 	output += dr.Sort.String()
 
-	if dr.Modifier != 0 {
-		output += fmt.Sprintf("%+d", dr.Modifier)
-	}
-
 	return output
 }
 
@@ -333,6 +337,7 @@ type GroupedRoll struct {
 	Success  *ComparisonOp
 	Failure  *ComparisonOp
 	Combined bool
+	Negative bool
 }
 
 // Roll gets the results of rolling the dice that make up a dice roll
@@ -375,6 +380,14 @@ func (gr *GroupedRoll) Roll() (result Result) {
 	// 7. Add modifier or tally successes
 	finaliseTotals(gr.Success, gr.Failure, gr.Modifier, 1, &result)
 
+	if gr.Negative {
+		result.Total *= -1
+		for i, r := range result.Results {
+			r.Result *= -1
+			result.Results[i] = r
+		}
+	}
+
 	return result
 }
 
@@ -383,7 +396,9 @@ func (gr *GroupedRoll) String() (output string) {
 	parts := []string{}
 
 	for _, roll := range gr.Rolls {
-		parts = append(parts, roll.String())
+		if roll != nil {
+			parts = append(parts, roll.String())
+		}
 	}
 
 	sep := ", "
@@ -422,6 +437,10 @@ func (gr *GroupedRoll) String() (output string) {
 
 	if gr.Modifier != 0 {
 		output += fmt.Sprintf("%+d", gr.Modifier)
+	}
+
+	if gr.Negative {
+		output = "-" + output
 	}
 
 	return output

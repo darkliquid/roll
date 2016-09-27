@@ -426,6 +426,24 @@ func TestDiceRoll_Roll(t *testing.T) {
 			},
 			scnt: 1,
 		},
+
+		// Normal Die (6) successes on >4, failures =6
+		{
+			seed: 0,
+			die:  NormalDie(6),
+			mux:  3,
+			res:  []int{1, 1, 2},
+			totl: 1,
+			succ: &ComparisonOp{
+				Type:  GreaterThan,
+				Value: 4,
+			},
+			fail: &ComparisonOp{
+				Type:  Equals,
+				Value: 6,
+			},
+			scnt: 1,
+		},
 	}
 
 	for i, tt := range tests {
@@ -1157,7 +1175,7 @@ func TestGroupedRoll_String(t *testing.T) {
 				},
 			},
 			mod: 2,
-			res: "{3d6+4, d4, 2d8+10}kh1+2",
+			res: "{3d6+4, d4, 2d8+10}kh+2",
 			lmit: &LimitOp{
 				Type:   KeepHighest,
 				Amount: 1,
