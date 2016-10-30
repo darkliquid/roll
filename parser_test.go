@@ -73,6 +73,19 @@ func TestParser_Parse(t *testing.T) {
 			},
 		},
 
+		// Simple roll with limit
+		{
+			s: `4d6kh3`,
+			roll: &DiceRoll{
+				Multiplier: 4,
+				Die: NormalDie(6),
+				Limit: &LimitOp{
+					Type: KeepHighest,
+					Amount: 3,
+				},
+			},
+		},
+
 		// Multi-roll, compounded on 5s, keep top 3, sort descending, +3
 		{
 			s: `6d6!!5kh3sd+3`,

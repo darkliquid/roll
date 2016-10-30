@@ -427,7 +427,7 @@ func TestDiceRoll_Roll(t *testing.T) {
 			scnt: 1,
 		},
 
-		// Normal Die (6) successes on >4, failures =6
+		// Normal Die (6) successes on =1, failures =2
 		{
 			seed: 0,
 			die:  NormalDie(6),
@@ -435,12 +435,12 @@ func TestDiceRoll_Roll(t *testing.T) {
 			res:  []int{1, 1, 2},
 			totl: 1,
 			succ: &ComparisonOp{
-				Type:  GreaterThan,
-				Value: 4,
+				Type:  Equals,
+				Value: 1,
 			},
 			fail: &ComparisonOp{
 				Type:  Equals,
-				Value: 6,
+				Value: 2,
 			},
 			scnt: 1,
 		},
@@ -461,8 +461,8 @@ func TestDiceRoll_Roll(t *testing.T) {
 		}
 		rolls := stmt.Roll()
 		results := make([]int, len(rolls.Results))
-		for i, v := range rolls.Results {
-			results[i] = v.Result
+		for x, v := range rolls.Results {
+			results[x] = v.Result
 		}
 
 		if !reflect.DeepEqual(tt.res, results) {
