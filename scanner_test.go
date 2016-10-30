@@ -31,6 +31,7 @@ func TestScanner_Scan(t *testing.T) {
 		{s: `d6r`, tok: tDIE, lit: "d6"},
 		{s: `d6}`, tok: tDIE, lit: "d6"},
 		{s: `d6 `, tok: tDIE, lit: "d6"},
+		{s: `d6kh3`, tok: tDIE, lit: "d6"},
 
 		// Modifiers
 		{s: `+`, tok: tPLUS, lit: "+"},
