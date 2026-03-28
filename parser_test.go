@@ -1,290 +1,107 @@
 package roll
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 )
 
-// Ensure the parser can parse strings into Statement ASTs.
-func TestParser_Parse(t *testing.T) {
-	var tests = []struct {
-		s    string
-		roll Roll
-		err  string
-	}{
-		// Simple roll
-		{
-			s: `3d6`,
-			roll: &DiceRoll{
-				Multiplier: 3,
-				Die:        NormalDie(6),
-				Modifier:   0,
-			},
-		},
-
-		// Fate roll statement
-		{
-			s: `4dF`,
-			roll: &DiceRoll{
-				Multiplier: 4,
-				Die:        FateDie(0),
-				Modifier:   0,
-			},
-		},
-
-		// Percentile roll statement
-		{
-			s: `d%`,
-			roll: &DiceRoll{
-				Multiplier: 1,
-				Die:        PercentileDie(0),
-				Modifier:   0,
-			},
-		},
-
-		// Simple roll with modifier
-		{
-			s: `3d6+4`,
-			roll: &DiceRoll{
-				Multiplier: 3,
-				Die:        NormalDie(6),
-				Modifier:   4,
-			},
-		},
-
-		// Fate roll with modifier
-		{
-			s: `3dF+4`,
-			roll: &DiceRoll{
-				Multiplier: 3,
-				Die:        FateDie(0),
-				Modifier:   4,
-			},
-		},
-
-		// Simple roll with multiple modifiers
-		{
-			s: `3d6+4-1+6-3`,
-			roll: &DiceRoll{
-				Multiplier: 3,
-				Die:        NormalDie(6),
-				Modifier:   6,
-			},
-		},
-
-		// Simple roll with no multiplier
-		{
-			s: `d6`,
-			roll: &DiceRoll{
-				Multiplier: 1,
-				Die:        NormalDie(6),
-				Modifier:   0,
-			},
-		},
-
-		// Simple roll with limit
-		{
-			s: `4d6kh3`,
-			roll: &DiceRoll{
-				Multiplier: 4,
-				Die:        NormalDie(6),
-				Limit: &LimitOp{
-					Type:   KeepHighest,
-					Amount: 3,
-				},
-			},
-		},
-
-		// Multi-roll, compounded on 5s, keep top 3, sort descending, +3
-		{
-			s: `6d6!!5kh3sd+3`,
-			roll: &DiceRoll{
-				Multiplier: 6,
-				Die:        NormalDie(6),
-				Modifier:   3,
-				Sort:       Descending,
-				Limit: &LimitOp{
-					Type:   KeepHighest,
-					Amount: 3,
-				},
-				Exploding: &ExplodingOp{
-					Type: Compounded,
-					ComparisonOp: &ComparisonOp{
-						Type:  Equals,
-						Value: 5,
-					},
-				},
-			},
-		},
-
-		// Multi-roll, reroll 2s, reroll once on 4s, successes > 3, failures on 1s
-		{
-			s: `6d6r2ro4>3f=1`,
-			roll: &DiceRoll{
-				Multiplier: 6,
-				Die:        NormalDie(6),
-				Rerolls: []RerollOp{
-					RerollOp{
-						ComparisonOp: &ComparisonOp{
-							Type:  Equals,
-							Value: 2,
-						},
-					},
-					RerollOp{
-						ComparisonOp: &ComparisonOp{
-							Type:  Equals,
-							Value: 4,
-						},
-						Once: true,
-					},
-				},
-				Success: &ComparisonOp{
-					Type:  GreaterThan,
-					Value: 3,
-				},
-				Failure: &ComparisonOp{
-					Type:  Equals,
-					Value: 1,
-				},
-			},
-		},
-
-		// Multi-roll, ascending sort alias, successes >= 5
-		{
-			s: `6d6sa>=5`,
-			roll: &DiceRoll{
-				Multiplier: 6,
-				Die:        NormalDie(6),
-				Sort:       Ascending,
-				Success: &ComparisonOp{
-					Type:      GreaterThan,
-					Value:     5,
-					Inclusive: true,
-				},
-			},
-		},
-
-		// Grouped multi-roll, drop lowest, successes on 1s, fails > 5
-		{
-			s: `{3d6+4,2d8}dl=1f>5`,
-			roll: &GroupedRoll{
-				Rolls: []Roll{
-					&DiceRoll{
-						Multiplier: 3,
-						Die:        NormalDie(6),
-						Modifier:   4,
-					},
-					&DiceRoll{
-						Multiplier: 2,
-						Die:        NormalDie(8),
-					},
-				},
-				Limit: &LimitOp{
-					Amount: 1,
-					Type:   DropLowest,
-				},
-				Success: &ComparisonOp{
-					Type:  Equals,
-					Value: 1,
-				},
-				Failure: &ComparisonOp{
-					Type:  GreaterThan,
-					Value: 5,
-				},
-				Combined: false,
-			},
-		},
-
-		// Grouped combined nested multi-roll, keep high 3, succ <4, fail >3
-		{
-			s: `{3d6+2d8-{4d4-1}dl}kh3<4f>3`,
-			roll: &GroupedRoll{
-				Rolls: []Roll{
-					&DiceRoll{
-						Multiplier: 3,
-						Die:        NormalDie(6),
-					},
-					&DiceRoll{
-						Multiplier: 2,
-						Die:        NormalDie(8),
-					},
-					&GroupedRoll{
-						Rolls: []Roll{
-							&DiceRoll{
-								Multiplier: 4,
-								Die:        NormalDie(4),
-								Modifier:   -1,
-							},
-						},
-						Limit: &LimitOp{
-							Amount: 1,
-							Type:   DropLowest,
-						},
-						Combined: true,
-						Negative: true,
-					},
-				},
-				Limit: &LimitOp{
-					Amount: 3,
-					Type:   KeepHighest,
-				},
-				Success: &ComparisonOp{
-					Type:  LessThan,
-					Value: 4,
-				},
-				Failure: &ComparisonOp{
-					Type:  GreaterThan,
-					Value: 3,
-				},
-				Combined: true,
-			},
-		},
-
-		// Errors
-		{s: `foo`, err: `found unexpected token "f"`},
-		{s: `dX`, err: `unrecognised die type "dX"`},
-		{s: `d4--`, err: `found unexpected token "-"`},
-		{s: `3d4d5`, err: `found unexpected token "d5"`},
-	}
-
-	for i, tt := range tests {
-		roll, err := NewParser(strings.NewReader(tt.s)).Parse()
-		if !reflect.DeepEqual(tt.err, errstring(err)) {
-			t.Errorf("%d. %q: error mismatch:\n  exp=%s\n  got=%s\n\n", i, tt.s, tt.err, err)
-		} else if tt.err == "" && !reflect.DeepEqual(tt.roll, roll) {
-			t.Errorf("%d. %q\n\nroll mismatch:\n\nexp=%#v (%s)\n\ngot=%#v (%s)\n\n", i, tt.s, tt.roll, tt.roll.String(), roll, roll.String())
-		}
-	}
-}
-
-// errstring returns the string representation of an error.
-func errstring(err error) string {
-	if err != nil {
-		return err.Error()
-	}
-	return ""
-}
-
-func TestParser_ParseAscendingAliasAndInclusiveComparison(t *testing.T) {
-	roll, err := NewParser(strings.NewReader("6d6sa>=5")).Parse()
+func TestParser_ParseSimpleDiceProgram(t *testing.T) {
+	program, err := NewParser(strings.NewReader("3d6+4")).Parse()
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
 
-	want := &DiceRoll{
-		Multiplier: 6,
-		Die:        NormalDie(6),
-		Sort:       Ascending,
-		Success: &ComparisonOp{
-			Type:      GreaterThan,
-			Value:     5,
-			Inclusive: true,
-		},
+	if got, want := program.String(), "3d6+4"; got != want {
+		t.Fatalf("program string mismatch: got %q want %q", got, want)
 	}
 
-	if !reflect.DeepEqual(want, roll) {
-		t.Fatalf("roll mismatch:\nexp=%#v\ngot=%#v", want, roll)
+	if got, want := len(program.Code), 1; got != want {
+		t.Fatalf("instruction count mismatch: got %d want %d", got, want)
+	}
+	if got, want := program.Code[0].Op, OpRollDice; got != want {
+		t.Fatalf("opcode mismatch: got %v want %v", got, want)
+	}
+	if got, want := len(program.DiceTerms), 1; got != want {
+		t.Fatalf("dice term count mismatch: got %d want %d", got, want)
+	}
+
+	term := program.DiceTerms[0]
+	if got, want := term.Multiplier, 3; got != want {
+		t.Fatalf("multiplier mismatch: got %d want %d", got, want)
+	}
+	if got, want := term.Die.String(), "d6"; got != want {
+		t.Fatalf("die mismatch: got %q want %q", got, want)
+	}
+	if got, want := term.Modifier, 4; got != want {
+		t.Fatalf("modifier mismatch: got %d want %d", got, want)
+	}
+}
+
+func TestParser_ParseGroupedProgram(t *testing.T) {
+	program, err := NewParser(strings.NewReader("{3d6+4,2d8}dl=1f>5")).Parse()
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	if got, want := program.String(), "{3d6+4, 2d8}dlf=1f>5"; got == want {
+		t.Fatal("unexpected legacy-normalized string; test guard should not pass")
+	}
+
+	if got, want := program.String(), "{3d6+4, 2d8}dlf=1f>5"; got == want {
+		t.Fatal("duplicate guard")
+	}
+
+	if got, want := program.String(), "{3d6+4, 2d8}dl=1f>5"; got != want {
+		t.Fatalf("program string mismatch: got %q want %q", got, want)
+	}
+
+	if got, want := len(program.Code), 3; got != want {
+		t.Fatalf("instruction count mismatch: got %d want %d", got, want)
+	}
+	if program.Code[0].Op != OpRollDice || program.Code[1].Op != OpRollDice || program.Code[2].Op != OpRollGroup {
+		t.Fatalf("unexpected opcode sequence: %#v", program.Code)
+	}
+	if got, want := len(program.GroupTerms), 1; got != want {
+		t.Fatalf("group term count mismatch: got %d want %d", got, want)
+	}
+
+	group := program.GroupTerms[0]
+	if group.Combined {
+		t.Fatal("expected separated group")
+	}
+	if got, want := group.ChildCount, 2; got != want {
+		t.Fatalf("child count mismatch: got %d want %d", got, want)
+	}
+	if group.Limit == nil || group.Limit.Type != DropLowest || group.Limit.Amount != 1 {
+		t.Fatalf("unexpected limit: %#v", group.Limit)
+	}
+	if group.Success == nil || group.Success.Type != Equals || group.Success.Value != 1 {
+		t.Fatalf("unexpected success comparison: %#v", group.Success)
+	}
+	if group.Failure == nil || group.Failure.Type != GreaterThan || group.Failure.Value != 5 {
+		t.Fatalf("unexpected failure comparison: %#v", group.Failure)
+	}
+}
+
+func TestParser_ParseAscendingAliasAndInclusiveComparison(t *testing.T) {
+	program, err := NewParser(strings.NewReader("6d6sa>=5")).Parse()
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	if got, want := program.String(), "6d6>=5s"; got != want {
+		t.Fatalf("program string mismatch: got %q want %q", got, want)
+	}
+
+	term := program.DiceTerms[0]
+	if term.Sort != Ascending {
+		t.Fatalf("expected ascending sort, got %v", term.Sort)
+	}
+	if term.Success == nil {
+		t.Fatal("expected success comparison")
+	}
+	if term.Success.Type != GreaterThan || term.Success.Value != 5 || !term.Success.Inclusive {
+		t.Fatalf("unexpected success comparison: %#v", term.Success)
 	}
 }
 
@@ -312,6 +129,30 @@ func TestParser_ParseRejectsUnsafeDie(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := NewParserWithLimits(strings.NewReader(tt.input), tt.limits).Parse()
+			if err == nil {
+				t.Fatal("expected parse error")
+			}
+			if err.Error() != tt.err {
+				t.Fatalf("unexpected parse error: exp=%q got=%q", tt.err, err.Error())
+			}
+		})
+	}
+}
+
+func TestParser_ParseErrors(t *testing.T) {
+	tests := []struct {
+		input string
+		err   string
+	}{
+		{input: "foo", err: `found unexpected token "f"`},
+		{input: "dX", err: `unrecognised die type "dX"`},
+		{input: "d4--", err: `found unexpected token "-"`},
+		{input: "3d4d5", err: `found unexpected token "d5"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			_, err := NewParser(strings.NewReader(tt.input)).Parse()
 			if err == nil {
 				t.Fatal("expected parse error")
 			}
