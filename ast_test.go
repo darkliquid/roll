@@ -1,7 +1,6 @@
 package roll
 
 import (
-	"math/rand"
 	"reflect"
 	"testing"
 )
@@ -447,35 +446,36 @@ func TestDiceRoll_Roll(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		rand.Seed(tt.seed)
-		stmt := &DiceRoll{
-			Multiplier: tt.mux,
-			Die:        tt.die,
-			Modifier:   tt.mod,
-			Exploding:  tt.exp,
-			Limit:      tt.lmt,
-			Success:    tt.succ,
-			Failure:    tt.fail,
-			Rerolls:    tt.roll,
-			Sort:       tt.sort,
-		}
-		rolls := stmt.Roll()
-		results := make([]int, len(rolls.Results))
-		for x, v := range rolls.Results {
-			results[x] = v.Result
-		}
+		withTestSeed(tt.seed, func() {
+			stmt := &DiceRoll{
+				Multiplier: tt.mux,
+				Die:        tt.die,
+				Modifier:   tt.mod,
+				Exploding:  tt.exp,
+				Limit:      tt.lmt,
+				Success:    tt.succ,
+				Failure:    tt.fail,
+				Rerolls:    tt.roll,
+				Sort:       tt.sort,
+			}
+			rolls := stmt.Roll()
+			results := make([]int, len(rolls.Results))
+			for x, v := range rolls.Results {
+				results[x] = v.Result
+			}
 
-		if !reflect.DeepEqual(tt.res, results) {
-			t.Errorf("%d. result mismatch: exp=%v got=%v", i, tt.res, results)
-		}
+			if !reflect.DeepEqual(tt.res, results) {
+				t.Errorf("%d. result mismatch: exp=%v got=%v", i, tt.res, results)
+			}
 
-		if tt.scnt != rolls.Successes {
-			t.Errorf("%d. successes mismatch: exp=%v got=%v", i, tt.scnt, rolls.Successes)
-		}
+			if tt.scnt != rolls.Successes {
+				t.Errorf("%d. successes mismatch: exp=%v got=%v", i, tt.scnt, rolls.Successes)
+			}
 
-		if tt.totl != rolls.Total {
-			t.Errorf("%d. total mismatch: exp=%v got=%v", i, tt.totl, rolls.Total)
-		}
+			if tt.totl != rolls.Total {
+				t.Errorf("%d. total mismatch: exp=%v got=%v", i, tt.totl, rolls.Total)
+			}
+		})
 	}
 }
 
@@ -856,24 +856,37 @@ func TestDiceRoll_String(t *testing.T) {
 				Value: 5,
 			},
 		},
+
+		// Normal Die (6) successes on >=4
+		{
+			die: NormalDie(6),
+			mux: 3,
+			res: "+3d6>=4",
+			succ: &ComparisonOp{
+				Type:      GreaterThan,
+				Value:     4,
+				Inclusive: true,
+			},
+		},
 	}
 
 	for i, tt := range tests {
-		rand.Seed(tt.seed)
-		stmt := &DiceRoll{
-			Multiplier: tt.mux,
-			Die:        tt.die,
-			Modifier:   tt.mod,
-			Exploding:  tt.exp,
-			Rerolls:    tt.roll,
-			Success:    tt.succ,
-			Failure:    tt.fail,
-			Sort:       tt.sort,
-			Limit:      tt.lmt,
-		}
-		if stmt.String() != tt.res {
-			t.Errorf("%d. result mismatch: exp=%v got=%v", i, tt.res, stmt.String())
-		}
+		withTestSeed(tt.seed, func() {
+			stmt := &DiceRoll{
+				Multiplier: tt.mux,
+				Die:        tt.die,
+				Modifier:   tt.mod,
+				Exploding:  tt.exp,
+				Rerolls:    tt.roll,
+				Success:    tt.succ,
+				Failure:    tt.fail,
+				Sort:       tt.sort,
+				Limit:      tt.lmt,
+			}
+			if stmt.String() != tt.res {
+				t.Errorf("%d. result mismatch: exp=%v got=%v", i, tt.res, stmt.String())
+			}
+		})
 	}
 }
 
@@ -1067,33 +1080,123 @@ func TestGroupedRoll_Roll(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		rand.Seed(tt.seed)
-		stmt := &GroupedRoll{
-			Rolls:    tt.rolls,
-			Modifier: tt.mod,
-			Limit:    tt.lmit,
-			Success:  tt.succ,
-			Failure:  tt.fail,
-			Combined: tt.comb,
-		}
-		rolls := stmt.Roll()
-		results := make([]int, len(rolls.Results))
-		for i, v := range rolls.Results {
-			results[i] = v.Result
-		}
+		withTestSeed(tt.seed, func() {
+			stmt := &GroupedRoll{
+				Rolls:    tt.rolls,
+				Modifier: tt.mod,
+				Limit:    tt.lmit,
+				Success:  tt.succ,
+				Failure:  tt.fail,
+				Combined: tt.comb,
+			}
+			rolls := stmt.Roll()
+			results := make([]int, len(rolls.Results))
+			for i, v := range rolls.Results {
+				results[i] = v.Result
+			}
 
-		if !reflect.DeepEqual(tt.res, results) {
-			t.Errorf("%d. result mismatch: exp=%v got=%v", i, tt.res, results)
-		}
+			if !reflect.DeepEqual(tt.res, results) {
+				t.Errorf("%d. result mismatch: exp=%v got=%v", i, tt.res, results)
+			}
 
-		if tt.scnt != rolls.Successes {
-			t.Errorf("%d. successes mismatch: exp=%v got=%v", i, tt.scnt, rolls.Successes)
-		}
+			if tt.scnt != rolls.Successes {
+				t.Errorf("%d. successes mismatch: exp=%v got=%v", i, tt.scnt, rolls.Successes)
+			}
 
-		if tt.totl != rolls.Total {
-			t.Errorf("%d. total mismatch: exp=%v got=%v", i, tt.totl, rolls.Total)
+			if tt.totl != rolls.Total {
+				t.Errorf("%d. total mismatch: exp=%v got=%v", i, tt.totl, rolls.Total)
+			}
+		})
+	}
+}
+
+func TestComparisonOp_MatchInclusive(t *testing.T) {
+	tests := []struct {
+		name string
+		op   *ComparisonOp
+		val  int
+		want bool
+	}{
+		{
+			name: "greater inclusive",
+			op: &ComparisonOp{
+				Type:      GreaterThan,
+				Value:     4,
+				Inclusive: true,
+			},
+			val:  4,
+			want: true,
+		},
+		{
+			name: "less inclusive",
+			op: &ComparisonOp{
+				Type:      LessThan,
+				Value:     2,
+				Inclusive: true,
+			},
+			val:  2,
+			want: true,
+		},
+		{
+			name: "greater strict",
+			op: &ComparisonOp{
+				Type:  GreaterThan,
+				Value: 4,
+			},
+			val:  4,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		if got := tt.op.Match(tt.val); got != tt.want {
+			t.Errorf("%s: expected %v, got %v", tt.name, tt.want, got)
 		}
 	}
+}
+
+func TestEvaluateRollWithLimits(t *testing.T) {
+	t.Run("rejects unsafe die built in AST", func(t *testing.T) {
+		_, err := EvaluateRollWithLimits(&DiceRoll{
+			Multiplier: 1,
+			Die:        NormalDie(1),
+		}, DefaultLimits)
+		if err == nil {
+			t.Fatal("expected unsafe die error")
+		}
+		if err.Error() != `unsafe die type "d1"` {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("enforces evaluation depth", func(t *testing.T) {
+		roll := &GroupedRoll{
+			Combined: true,
+			Rolls: []Roll{
+				&GroupedRoll{
+					Combined: true,
+					Rolls: []Roll{
+						&DiceRoll{Multiplier: 1, Die: NormalDie(6)},
+					},
+				},
+			},
+		}
+
+		withTestSeed(0, func() {
+			_, err := EvaluateRollWithLimits(roll, Limits{
+				MaxDieSize:     100,
+				MaxRollsPerDie: 10,
+				MaxRollsTotal:  10,
+				MaxEvalDepth:   2,
+			})
+			if err == nil {
+				t.Fatal("expected depth error")
+			}
+			if err.Error() != "roll exceeded maximum evaluation depth of 2" {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	})
 }
 
 // Ensure the group dice roll statement string representation is correct
@@ -1320,18 +1423,19 @@ func TestGroupedRoll_String(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		rand.Seed(tt.seed)
-		stmt := &GroupedRoll{
-			Rolls:    tt.rolls,
-			Modifier: tt.mod,
-			Limit:    tt.lmit,
-			Success:  tt.succ,
-			Failure:  tt.fail,
-			Combined: tt.comb,
-		}
+		withTestSeed(tt.seed, func() {
+			stmt := &GroupedRoll{
+				Rolls:    tt.rolls,
+				Modifier: tt.mod,
+				Limit:    tt.lmit,
+				Success:  tt.succ,
+				Failure:  tt.fail,
+				Combined: tt.comb,
+			}
 
-		if !reflect.DeepEqual(tt.res, stmt.String()) {
-			t.Errorf("%d. result mismatch: exp=%v got=%v", i, tt.res, stmt.String())
-		}
+			if !reflect.DeepEqual(tt.res, stmt.String()) {
+				t.Errorf("%d. result mismatch: exp=%v got=%v", i, tt.res, stmt.String())
+			}
+		})
 	}
 }

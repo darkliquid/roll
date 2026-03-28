@@ -5,6 +5,16 @@ import (
 	"testing"
 )
 
+func withTestSeed(seed int64, fn func()) {
+	prev := randomIntn
+	r := rand.New(rand.NewSource(seed))
+	randomIntn = r.Intn
+	defer func() {
+		randomIntn = prev
+	}()
+	fn()
+}
+
 // Ensure the die can roll results correctly.
 func TestDie_Roll(t *testing.T) {
 	var tests = []struct {
@@ -30,15 +40,19 @@ func TestDie_Roll(t *testing.T) {
 		{seed: 12, die: NormalDie(6), res: 4, sym: "4"},
 		{seed: 3, die: NormalDie(6), res: 5, sym: "5"},
 		{seed: 1, die: NormalDie(6), res: 6, sym: "6"},
+
+		// Percentile Die
+		{seed: 0, die: PercentileDie(0), res: 75, sym: "75"},
 	}
 
 	for i, tt := range tests {
-		rand.Seed(tt.seed)
-		result := tt.die.Roll()
-		if tt.res != result.Result {
-			t.Errorf("%d. result mismatch: exp=%d got=%d", i, tt.res, result.Result)
-		} else if tt.sym != result.Symbol {
-			t.Errorf("%d. symbol mismatch: exp=%q got=%q", i, tt.sym, result.Symbol)
-		}
+		withTestSeed(tt.seed, func() {
+			result := tt.die.Roll()
+			if tt.res != result.Result {
+				t.Errorf("%d. result mismatch: exp=%d got=%d", i, tt.res, result.Result)
+			} else if tt.sym != result.Symbol {
+				t.Errorf("%d. symbol mismatch: exp=%q got=%q", i, tt.sym, result.Symbol)
+			}
+		})
 	}
 }

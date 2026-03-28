@@ -22,8 +22,9 @@ const (
 // ComparisonOp is the operation that defines how you compare against a roll
 // to determine whether the result counts
 type ComparisonOp struct {
-	Type  ComparisonType
-	Value int
+	Type      ComparisonType
+	Value     int
+	Inclusive bool
 }
 
 // Match returns true if the given value compares positively against the op val
@@ -32,8 +33,14 @@ func (op *ComparisonOp) Match(val int) bool {
 	case Equals:
 		return val == op.Value
 	case GreaterThan:
+		if op.Inclusive {
+			return val >= op.Value
+		}
 		return val > op.Value
 	case LessThan:
+		if op.Inclusive {
+			return val <= op.Value
+		}
 		return val < op.Value
 	}
 	return false
@@ -45,8 +52,14 @@ func (op *ComparisonOp) String() string {
 	case Equals:
 		return fmt.Sprintf("=%d", op.Value)
 	case GreaterThan:
+		if op.Inclusive {
+			return fmt.Sprintf(">=%d", op.Value)
+		}
 		return fmt.Sprintf(">%d", op.Value)
 	case LessThan:
+		if op.Inclusive {
+			return fmt.Sprintf("<=%d", op.Value)
+		}
 		return fmt.Sprintf("<%d", op.Value)
 	}
 
@@ -172,6 +185,129 @@ type Roll interface {
 	String() string
 }
 
+// Limits configures parser and evaluator safety limits.
+type Limits struct {
+	MaxDieSize     int
+	MaxRollsPerDie int
+	MaxRollsTotal  int
+	MaxEvalDepth   int
+}
+
+// DefaultLimits are the package-level defaults used by Parse and ParseString.
+var DefaultLimits = Limits{
+	MaxDieSize:     1000000,
+	MaxRollsPerDie: 1000000,
+	MaxRollsTotal:  1000000,
+	MaxEvalDepth:   256,
+}
+
+func (l Limits) normalized() Limits {
+	if l.MaxDieSize <= 0 {
+		l.MaxDieSize = DefaultLimits.MaxDieSize
+	}
+	if l.MaxRollsPerDie <= 0 {
+		l.MaxRollsPerDie = DefaultLimits.MaxRollsPerDie
+	}
+	if l.MaxRollsTotal <= 0 {
+		l.MaxRollsTotal = DefaultLimits.MaxRollsTotal
+	}
+	if l.MaxEvalDepth <= 0 {
+		l.MaxEvalDepth = DefaultLimits.MaxEvalDepth
+	}
+	return l
+}
+
+// ErrUnsafeDie is raised when a die configuration is categorically unsafe.
+type ErrUnsafeDie string
+
+func (e ErrUnsafeDie) Error() string {
+	return fmt.Sprintf("unsafe die type %q", string(e))
+}
+
+// ErrLimitExceeded is raised when parser or evaluator safety limits are exceeded.
+type ErrLimitExceeded string
+
+func (e ErrLimitExceeded) Error() string { return string(e) }
+
+type rollContext struct {
+	limits     Limits
+	totalRolls int
+	depth      int
+}
+
+func (ctx *rollContext) enter() error {
+	ctx.depth++
+	if ctx.depth > ctx.limits.MaxEvalDepth {
+		return ErrLimitExceeded(fmt.Sprintf("roll exceeded maximum evaluation depth of %d", ctx.limits.MaxEvalDepth))
+	}
+	return nil
+}
+
+func (ctx *rollContext) leave() {
+	if ctx.depth > 0 {
+		ctx.depth--
+	}
+}
+
+func (ctx *rollContext) recordRoll(perDie *int) error {
+	(*perDie)++
+	if *perDie > ctx.limits.MaxRollsPerDie {
+		return ErrLimitExceeded(fmt.Sprintf("die term exceeded maximum roll count of %d", ctx.limits.MaxRollsPerDie))
+	}
+
+	ctx.totalRolls++
+	if ctx.totalRolls > ctx.limits.MaxRollsTotal {
+		return ErrLimitExceeded(fmt.Sprintf("roll exceeded maximum total roll count of %d", ctx.limits.MaxRollsTotal))
+	}
+	return nil
+}
+
+// EvaluateRoll executes a parsed roll using DefaultLimits.
+func EvaluateRoll(roll Roll) (Result, error) {
+	return EvaluateRollWithLimits(roll, DefaultLimits)
+}
+
+// EvaluateRollWithLimits executes a parsed roll using explicit safety limits.
+func EvaluateRollWithLimits(roll Roll, limits Limits) (Result, error) {
+	ctx := &rollContext{limits: limits.normalized()}
+	return evalRollWithContext(ctx, roll)
+}
+
+func evalRollWithContext(ctx *rollContext, roll Roll) (Result, error) {
+	switch r := roll.(type) {
+	case *DiceRoll:
+		return r.rollWithContext(ctx)
+	case *GroupedRoll:
+		return r.rollWithContext(ctx)
+	default:
+		return roll.Roll(), nil
+	}
+}
+
+func validateDieLimits(die Die, limits Limits) error {
+	limits = limits.normalized()
+
+	var size int
+	switch d := die.(type) {
+	case NormalDie:
+		size = int(d)
+	case PercentileDie:
+		size = 100
+	case FateDie:
+		size = 3
+	default:
+		return nil
+	}
+
+	if size < 2 {
+		return ErrUnsafeDie(die.String())
+	}
+	if size > limits.MaxDieSize {
+		return ErrLimitExceeded(fmt.Sprintf("die size %d exceeds maximum %d", size, limits.MaxDieSize))
+	}
+	return nil
+}
+
 // Result is a collection of die rolls and a count of successes
 type Result struct {
 	Results   []DieRoll
@@ -209,6 +345,21 @@ type DiceRoll struct {
 
 // Roll gets the results of rolling the dice that make up a dice roll
 func (dr *DiceRoll) Roll() (result Result) {
+	result, _ = dr.rollWithContext(nil)
+	return
+}
+
+func (dr *DiceRoll) rollWithContext(ctx *rollContext) (result Result, err error) {
+	if ctx != nil {
+		if err = ctx.enter(); err != nil {
+			return
+		}
+		defer ctx.leave()
+		if err = validateDieLimits(dr.Die, ctx.limits); err != nil {
+			return
+		}
+	}
+
 	// 1. Do Multiplier rolls of Die
 	if dr.Multiplier == 0 {
 		return
@@ -219,7 +370,18 @@ func (dr *DiceRoll) Roll() (result Result) {
 		totalMultiplier = -1
 	}
 
-	for i := 0; i < dr.Multiplier*totalMultiplier; i++ {
+	rollCount := dr.Multiplier * totalMultiplier
+	if ctx != nil && rollCount > ctx.limits.MaxRollsPerDie {
+		return Result{}, ErrLimitExceeded(fmt.Sprintf("die term exceeded maximum roll count of %d", ctx.limits.MaxRollsPerDie))
+	}
+
+	dieRolls := 0
+	for i := 0; i < rollCount; i++ {
+		if ctx != nil {
+			if err = ctx.recordRoll(&dieRolls); err != nil {
+				return Result{}, err
+			}
+		}
 		result.Results = append(result.Results, dr.Die.Roll())
 	}
 
@@ -228,6 +390,11 @@ func (dr *DiceRoll) Roll() (result Result) {
 	RerollOnce:
 		for _, reroll := range dr.Rerolls {
 			for reroll.Match(roll.Result) {
+				if ctx != nil {
+					if err = ctx.recordRoll(&dieRolls); err != nil {
+						return Result{}, err
+					}
+				}
 				roll = dr.Die.Roll()
 				result.Results[i] = roll
 				if reroll.Once {
@@ -243,6 +410,11 @@ func (dr *DiceRoll) Roll() (result Result) {
 		case Exploding:
 			for _, roll := range result.Results {
 				for dr.Exploding.Match(roll.Result) {
+					if ctx != nil {
+						if err = ctx.recordRoll(&dieRolls); err != nil {
+							return Result{}, err
+						}
+					}
 					roll = dr.Die.Roll()
 					result.Results = append(result.Results, roll)
 				}
@@ -252,6 +424,11 @@ func (dr *DiceRoll) Roll() (result Result) {
 			for _, roll := range result.Results {
 				for dr.Exploding.Match(roll.Result) {
 					compound += roll.Result
+					if ctx != nil {
+						if err = ctx.recordRoll(&dieRolls); err != nil {
+							return Result{}, err
+						}
+					}
 					roll = dr.Die.Roll()
 				}
 			}
@@ -259,6 +436,11 @@ func (dr *DiceRoll) Roll() (result Result) {
 		case Penetrating:
 			for _, roll := range result.Results {
 				for dr.Exploding.Match(roll.Result) {
+					if ctx != nil {
+						if err = ctx.recordRoll(&dieRolls); err != nil {
+							return Result{}, err
+						}
+					}
 					roll = dr.Die.Roll()
 					newroll := roll
 					newroll.Result--
@@ -289,44 +471,44 @@ func (dr *DiceRoll) Roll() (result Result) {
 
 // String represents the dice roll as a string
 func (dr *DiceRoll) String() string {
-	var output string
+	var output strings.Builder
 	if dr.Multiplier > 1 || dr.Multiplier < -1 {
-		output += fmt.Sprintf("%+d", dr.Multiplier)
+		output.WriteString(fmt.Sprintf("%+d", dr.Multiplier))
 	} else if dr.Multiplier == -1 {
-		output += "-"
+		output.WriteString("-")
 	} else if dr.Multiplier == 1 {
-		output += "+"
+		output.WriteString("+")
 	}
 
-	output += dr.Die.String()
+	output.WriteString(dr.Die.String())
 
 	if dr.Modifier != 0 {
-		output += fmt.Sprintf("%+d", dr.Modifier)
+		output.WriteString(fmt.Sprintf("%+d", dr.Modifier))
 	}
 
 	for _, r := range dr.Rerolls {
-		output += r.String()
+		output.WriteString(r.String())
 	}
 
 	if dr.Exploding != nil {
-		output += (*dr.Exploding).String()
+		output.WriteString((*dr.Exploding).String())
 	}
 
 	if dr.Limit != nil {
-		output += (*dr.Limit).String()
+		output.WriteString((*dr.Limit).String())
 	}
 
 	if dr.Success != nil {
-		output += (*dr.Success).String()
+		output.WriteString((*dr.Success).String())
 	}
 
 	if dr.Failure != nil {
-		output += "f" + (*dr.Failure).String()
+		output.WriteString("f" + (*dr.Failure).String())
 	}
 
-	output += dr.Sort.String()
+	output.WriteString(dr.Sort.String())
 
-	return output
+	return output.String()
 }
 
 // GroupedRoll is a group of other rolls. You can have nested groups.
@@ -342,8 +524,24 @@ type GroupedRoll struct {
 
 // Roll gets the results of rolling the dice that make up a dice roll
 func (gr *GroupedRoll) Roll() (result Result) {
+	result, _ = gr.rollWithContext(nil)
+	return
+}
+
+func (gr *GroupedRoll) rollWithContext(ctx *rollContext) (result Result, err error) {
+	if ctx != nil {
+		if err = ctx.enter(); err != nil {
+			return
+		}
+		defer ctx.leave()
+	}
+
 	// 1. Generate results for each roll
 	for _, roll := range gr.Rolls {
+		childResult, childErr := evalRollWithContext(ctx, roll)
+		if childErr != nil {
+			return Result{}, childErr
+		}
 		if gr.Combined {
 			// 2. If combined, merge all roll results into one result set
 			// NOTE: in combined mode, the roll modifier is added to each result
@@ -355,7 +553,7 @@ func (gr *GroupedRoll) Roll() (result Result) {
 				mod = t.Modifier
 			}
 
-			for _, res := range roll.Roll().Results {
+			for _, res := range childResult.Results {
 				result.Results = append(result.Results, DieRoll{
 					res.Result + mod,
 					strconv.Itoa(res.Result + mod),
@@ -363,8 +561,7 @@ func (gr *GroupedRoll) Roll() (result Result) {
 			}
 		} else {
 			// 3. If not combined, make new result set out of the totals for each roll
-			total := roll.Roll().Total
-			result.Results = append(result.Results, DieRoll{total, strconv.Itoa(total)})
+			result.Results = append(result.Results, DieRoll{childResult.Total, strconv.Itoa(childResult.Total)})
 		}
 	}
 
@@ -388,7 +585,7 @@ func (gr *GroupedRoll) Roll() (result Result) {
 		}
 	}
 
-	return result
+	return result, nil
 }
 
 // String represents the grouped roll as a string
@@ -455,10 +652,7 @@ func applyLimit(limitOp *LimitOp, result *Result) {
 		sort.Sort(&rolls)
 
 		// Work out limit
-		limit := limitOp.Amount
-		if limit > len(rolls.Results) {
-			limit = len(rolls.Results)
-		}
+		limit := min(limitOp.Amount, len(rolls.Results))
 
 		switch limitOp.Type {
 		case KeepHighest:

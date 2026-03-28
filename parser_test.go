@@ -33,6 +33,16 @@ func TestParser_Parse(t *testing.T) {
 			},
 		},
 
+		// Percentile roll statement
+		{
+			s: `d%`,
+			roll: &DiceRoll{
+				Multiplier: 1,
+				Die:        PercentileDie(0),
+				Modifier:   0,
+			},
+		},
+
 		// Simple roll with modifier
 		{
 			s: `3d6+4`,
@@ -78,9 +88,9 @@ func TestParser_Parse(t *testing.T) {
 			s: `4d6kh3`,
 			roll: &DiceRoll{
 				Multiplier: 4,
-				Die: NormalDie(6),
+				Die:        NormalDie(6),
 				Limit: &LimitOp{
-					Type: KeepHighest,
+					Type:   KeepHighest,
 					Amount: 3,
 				},
 			},
@@ -136,6 +146,21 @@ func TestParser_Parse(t *testing.T) {
 				Failure: &ComparisonOp{
 					Type:  Equals,
 					Value: 1,
+				},
+			},
+		},
+
+		// Multi-roll, ascending sort alias, successes >= 5
+		{
+			s: `6d6sa>=5`,
+			roll: &DiceRoll{
+				Multiplier: 6,
+				Die:        NormalDie(6),
+				Sort:       Ascending,
+				Success: &ComparisonOp{
+					Type:      GreaterThan,
+					Value:     5,
+					Inclusive: true,
 				},
 			},
 		},
@@ -239,4 +264,60 @@ func errstring(err error) string {
 		return err.Error()
 	}
 	return ""
+}
+
+func TestParser_ParseAscendingAliasAndInclusiveComparison(t *testing.T) {
+	roll, err := NewParser(strings.NewReader("6d6sa>=5")).Parse()
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	want := &DiceRoll{
+		Multiplier: 6,
+		Die:        NormalDie(6),
+		Sort:       Ascending,
+		Success: &ComparisonOp{
+			Type:      GreaterThan,
+			Value:     5,
+			Inclusive: true,
+		},
+	}
+
+	if !reflect.DeepEqual(want, roll) {
+		t.Fatalf("roll mismatch:\nexp=%#v\ngot=%#v", want, roll)
+	}
+}
+
+func TestParser_ParseRejectsUnsafeDie(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		limits Limits
+		err    string
+	}{
+		{
+			name:   "reject d1",
+			input:  "d1",
+			limits: DefaultLimits,
+			err:    `unsafe die type "d1"`,
+		},
+		{
+			name:   "reject oversized die",
+			input:  "d1001",
+			limits: Limits{MaxDieSize: 1000},
+			err:    "die size 1001 exceeds maximum 1000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewParserWithLimits(strings.NewReader(tt.input), tt.limits).Parse()
+			if err == nil {
+				t.Fatal("expected parse error")
+			}
+			if err.Error() != tt.err {
+				t.Fatalf("unexpected parse error: exp=%q got=%q", tt.err, err.Error())
+			}
+		})
+	}
 }

@@ -37,8 +37,9 @@ func (e ErrAmbiguousModifier) Error() string {
 
 // Parser is our dice rolling parser
 type Parser struct {
-	s   *Scanner
-	buf struct {
+	s      *Scanner
+	limits Limits
+	buf    struct {
 		tok Token
 		lit string
 		n   int
@@ -47,7 +48,12 @@ type Parser struct {
 
 // NewParser returns a Parser instance
 func NewParser(r io.Reader) *Parser {
-	return &Parser{s: NewScanner(r)}
+	return NewParserWithLimits(r, DefaultLimits)
+}
+
+// NewParserWithLimits returns a Parser instance using explicit safety limits.
+func NewParserWithLimits(r io.Reader, limits Limits) *Parser {
+	return &Parser{s: NewScanner(r), limits: limits.normalized()}
 }
 
 // Parse parses a Roll statement.
@@ -316,6 +322,8 @@ func (p *Parser) parseDiceRoll(grouped bool) (roll *DiceRoll, err error) {
 			switch lit {
 			case "s":
 				roll.Sort = Ascending
+			case "sa":
+				roll.Sort = Ascending
 			case "sd":
 				roll.Sort = Descending
 			}
@@ -396,12 +404,29 @@ func (p *Parser) parseModifier(tok Token) (int, error) {
 func (p *Parser) parseDie(dieCode string) (Die, error) {
 	trimmedDieCode := strings.TrimPrefix(strings.ToUpper(dieCode), "D")
 	if num, err := strconv.Atoi(trimmedDieCode); err == nil {
-		return NormalDie(num), nil
+		die := NormalDie(num)
+		if err := validateDieLimits(die, p.limits); err != nil {
+			return nil, err
+		}
+		return die, nil
 	}
 
 	// Is it a Fate/Fudge die roll?
 	if trimmedDieCode == "F" {
-		return FateDie(0), nil
+		die := FateDie(0)
+		if err := validateDieLimits(die, p.limits); err != nil {
+			return nil, err
+		}
+		return die, nil
+	}
+
+	// Is it a percentile roll shorthand?
+	if trimmedDieCode == "%" {
+		die := PercentileDie(0)
+		if err := validateDieLimits(die, p.limits); err != nil {
+			return nil, err
+		}
+		return die, nil
 	}
 
 	return nil, ErrUnknownDie(dieCode)
@@ -457,6 +482,10 @@ func (p *Parser) parseComparison() (cmp *ComparisonOp, err error) {
 	}
 
 	tok, lit = p.scan()
+	if tok == tEQUAL && (cmp.Type == GreaterThan || cmp.Type == LessThan) {
+		cmp.Inclusive = true
+		tok, lit = p.scan()
+	}
 	if tok != tNUM {
 		err = ErrUnexpectedToken(lit)
 		return
