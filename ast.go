@@ -526,7 +526,7 @@ func validateDieLimits(die Die, limits Limits) error {
 	case FateDie:
 		size = 3
 	default:
-		return nil
+		return fmt.Errorf("unsupported die type %T for limit validation", die)
 	}
 
 	if size < 2 {

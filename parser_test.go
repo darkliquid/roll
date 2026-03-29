@@ -47,10 +47,6 @@ func TestParser_ParseGroupedProgram(t *testing.T) {
 		t.Fatal("unexpected legacy-normalized string; test guard should not pass")
 	}
 
-	if got, want := program.String(), "{3d6+4, 2d8}dlf=1f>5"; got == want {
-		t.Fatal("duplicate guard")
-	}
-
 	if got, want := program.String(), "{3d6+4, 2d8}dl=1f>5"; got != want {
 		t.Fatalf("program string mismatch: got %q want %q", got, want)
 	}
