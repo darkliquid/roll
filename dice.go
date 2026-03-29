@@ -6,6 +6,8 @@ import (
 	"strconv"
 )
 
+var randomIntn = rand.Intn
+
 // DieRoll is the result of a die roll
 type DieRoll struct {
 	Result int
@@ -32,7 +34,7 @@ const (
 
 // Roll generates a random number and the appropriate symbol
 func (d FateDie) Roll() DieRoll {
-	val := rand.Intn(3) - 1
+	val := randomIntn(3) - 1
 	sym := FateBlank
 
 	switch val {
@@ -58,7 +60,7 @@ type NormalDie int
 
 // Roll generates a random number and the appropriate symbol
 func (d NormalDie) Roll() DieRoll {
-	val := rand.Intn(int(d)) + 1
+	val := randomIntn(int(d)) + 1
 	sym := strconv.Itoa(val)
 	return DieRoll{
 		Result: val,
@@ -69,4 +71,17 @@ func (d NormalDie) Roll() DieRoll {
 // String returns the string representation of the NormalDie type
 func (d NormalDie) String() string {
 	return fmt.Sprintf("d%d", d)
+}
+
+// PercentileDie is a die representing percentile rolls.
+type PercentileDie int
+
+// Roll generates a percentile result.
+func (d PercentileDie) Roll() DieRoll {
+	return NormalDie(100).Roll()
+}
+
+// String returns the string representation of the PercentileDie type.
+func (d PercentileDie) String() string {
+	return "d%"
 }

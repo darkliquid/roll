@@ -20,7 +20,7 @@ func isNumber(ch rune) bool {
 
 // Return true if ch is a weird die character
 func isDieChar(ch rune) bool {
-	return ch == 'F' || ch == 'f'
+	return ch == 'F' || ch == 'f' || ch == '%'
 }
 
 // Return true if ch is a comparison character
@@ -43,6 +43,11 @@ func isReroll(ch rune) bool {
 	return ch == 'r'
 }
 
+// Return true if ch is a sorting character
+func isSort(ch rune) bool {
+	return ch == 's'
+}
+
 // Return true if ch is a grouping character
 func isGrouping(ch rune) bool {
 	return ch == '{' || ch == ',' || ch == '}'
@@ -55,7 +60,7 @@ func isKeepLimit(ch rune) bool {
 
 // Return true if ch is a valid character for indicating a die roll
 func isValidDieRoll(ch rune) bool {
-	return !isWhitespace(ch) && !isGrouping(ch) && !isReroll(ch) && !isExploding(ch) && !isCompare(ch) && !isModifier(ch) && !isKeepLimit(ch) && ch != 'd' && ch != 'D'
+	return !isWhitespace(ch) && !isGrouping(ch) && !isReroll(ch) && !isSort(ch) && !isExploding(ch) && !isCompare(ch) && !isModifier(ch) && !isKeepLimit(ch) && ch != 'd' && ch != 'D'
 }
 
 // Scanner is our lexical scanner for dice roll strings
@@ -300,7 +305,7 @@ func (s *Scanner) scanSort() (tok Token, lit string) {
 		return tok, buf.String()
 	}
 
-	if ch == 'd' {
+	if ch == 'd' || ch == 'a' {
 		_, _ = buf.WriteRune(ch)
 	} else {
 		s.unread()

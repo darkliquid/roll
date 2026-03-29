@@ -7,64 +7,207 @@ import (
 	"strings"
 )
 
-// ErrUnexpectedToken is raised on unexpected tokens
+// ErrUnexpectedToken is raised on unexpected tokens.
 type ErrUnexpectedToken string
 
 func (e ErrUnexpectedToken) Error() string {
 	return fmt.Sprintf("found unexpected token %q", string(e))
 }
 
-// ErrUnknownDie is raised on unrecognised die types
+// ErrUnknownDie is raised on unrecognised die types.
 type ErrUnknownDie string
 
 func (e ErrUnknownDie) Error() string {
 	return fmt.Sprintf("unrecognised die type %q", string(e))
 }
 
-// ErrEndOfRoll is raised when parsing a roll has reached a terminating token
+// ErrEndOfRoll is raised when parsing a roll has reached a terminating token.
 type ErrEndOfRoll string
 
 func (e ErrEndOfRoll) Error() string {
 	return fmt.Sprintf("roll parsing terminated on %q", string(e))
 }
 
-// ErrAmbiguousModifier is raised when a multiplier was misread as a modifier
+// ErrAmbiguousModifier is raised when a multiplier was misread as a modifier.
 type ErrAmbiguousModifier int
 
 func (e ErrAmbiguousModifier) Error() string {
 	return fmt.Sprintf("misread %+d as modifier", e)
 }
 
-// Parser is our dice rolling parser
+// Parser compiles dice notation into VM bytecode.
 type Parser struct {
-	s   *Scanner
-	buf struct {
+	s      *Scanner
+	limits Limits
+	buf    struct {
 		tok Token
 		lit string
 		n   int
 	}
 }
 
-// NewParser returns a Parser instance
+// NewParser returns a compiler instance.
 func NewParser(r io.Reader) *Parser {
-	return &Parser{s: NewScanner(r)}
+	return NewParserWithLimits(r, DefaultLimits)
 }
 
-// Parse parses a Roll statement.
-func (p *Parser) Parse() (roll Roll, err error) {
-	// First token should be a NUM or a DIE
+// NewParserWithLimits returns a compiler instance using explicit safety limits.
+func NewParserWithLimits(r io.Reader, limits Limits) *Parser {
+	return &Parser{s: NewScanner(r), limits: limits.normalized()}
+}
+
+// Parse compiles a roll expression into VM bytecode.
+func (p *Parser) Parse() (program *Program, err error) {
 	tok, lit := p.scanIgnoreWhitespace()
 
-	roll, err = p.parseRoll(tok, lit, false)
+	var root compiledNode
+	root, err = p.parseRoll(tok, lit, false)
 	if e, ok := err.(ErrEndOfRoll); ok && e == "" {
 		err = nil
 	}
+	if err != nil {
+		return nil, err
+	}
 
-	return
+	program = &Program{
+		Rendered: strings.TrimPrefix(root.render(), "+"),
+		MaxDepth: root.maxDepth(),
+	}
+	root.emit(program)
+	return program, nil
 }
 
-// parseRoll gets a roll of any type
-func (p *Parser) parseRoll(tok Token, lit string, grouped bool) (Roll, error) {
+type compiledNode interface {
+	emit(*Program)
+	render() string
+	maxDepth() int
+}
+
+type diceNode struct {
+	term DiceTerm
+}
+
+func (n *diceNode) emit(program *Program) {
+	idx := len(program.DiceTerms)
+	program.DiceTerms = append(program.DiceTerms, n.term)
+	program.Code = append(program.Code, Instruction{Op: OpRollDice, Arg: idx})
+}
+
+func (n *diceNode) render() string {
+	return renderDiceTerm(n.term)
+}
+
+func (n *diceNode) maxDepth() int {
+	return 1
+}
+
+type groupNode struct {
+	term     GroupTerm
+	children []compiledNode
+}
+
+func (n *groupNode) emit(program *Program) {
+	for _, child := range n.children {
+		child.emit(program)
+	}
+	idx := len(program.GroupTerms)
+	term := n.term
+	term.ChildCount = len(n.children)
+	program.GroupTerms = append(program.GroupTerms, term)
+	program.Code = append(program.Code, Instruction{Op: OpRollGroup, Arg: idx})
+}
+
+func (n *groupNode) render() string {
+	parts := make([]string, 0, len(n.children))
+	for _, child := range n.children {
+		if child != nil {
+			parts = append(parts, child.render())
+		}
+	}
+
+	sep := ", "
+	if n.term.Combined {
+		sep = " + "
+	}
+
+	output := strings.Join(parts, sep)
+	if n.term.Combined {
+		output = strings.ReplaceAll(output, "+-", "-")
+	} else if len(n.children) == 1 {
+		output += ","
+	}
+
+	output = "{" + output + "}"
+	output = strings.ReplaceAll(output, "{+", "{")
+	output = strings.ReplaceAll(output, "{-", "{")
+	output = strings.ReplaceAll(output, ", +", ", ")
+	output = strings.ReplaceAll(output, ", -", ", ")
+	output = strings.ReplaceAll(output, "+ +", "+ ")
+	output = strings.ReplaceAll(output, "+ -", "- ")
+
+	if n.term.Limit != nil {
+		output += n.term.Limit.String()
+	}
+	if n.term.Success != nil {
+		output += n.term.Success.String()
+	}
+	if n.term.Failure != nil {
+		output += "f" + n.term.Failure.String()
+	}
+	if n.term.Modifier != 0 {
+		output += fmt.Sprintf("%+d", n.term.Modifier)
+	}
+	if n.term.Negative {
+		output = "-" + output
+	}
+
+	return output
+}
+
+func (n *groupNode) maxDepth() int {
+	depth := 1
+	for _, child := range n.children {
+		depth = max(depth, 1+child.maxDepth())
+	}
+	return depth
+}
+
+func renderDiceTerm(term DiceTerm) string {
+	var output strings.Builder
+	if term.Multiplier > 1 || term.Multiplier < -1 {
+		output.WriteString(fmt.Sprintf("%+d", term.Multiplier))
+	} else if term.Multiplier == -1 {
+		output.WriteString("-")
+	} else if term.Multiplier == 1 {
+		output.WriteString("+")
+	}
+
+	output.WriteString(term.Die.String())
+
+	if term.Modifier != 0 {
+		output.WriteString(fmt.Sprintf("%+d", term.Modifier))
+	}
+	for _, reroll := range term.Rerolls {
+		output.WriteString(reroll.String())
+	}
+	if term.Exploding != nil {
+		output.WriteString(term.Exploding.String())
+	}
+	if term.Limit != nil {
+		output.WriteString(term.Limit.String())
+	}
+	if term.Success != nil {
+		output.WriteString(term.Success.String())
+	}
+	if term.Failure != nil {
+		output.WriteString("f" + term.Failure.String())
+	}
+	output.WriteString(term.Sort.String())
+
+	return output.String()
+}
+
+func (p *Parser) parseRoll(tok Token, lit string, grouped bool) (compiledNode, error) {
 	switch tok {
 	case tNUM, tDIE:
 		return p.parseDiceRoll(grouped)
@@ -75,113 +218,85 @@ func (p *Parser) parseRoll(tok Token, lit string, grouped bool) (Roll, error) {
 	}
 }
 
-// parseGrouped parses a GroupedRoll statement
-func (p *Parser) parseGroupedRoll(grouped bool) (roll *GroupedRoll, err error) {
-	roll = &GroupedRoll{Combined: true}
+func (p *Parser) parseGroupedRoll(grouped bool) (compiledNode, error) {
+	node := &groupNode{term: GroupTerm{Combined: true}}
 
 	var negative bool
 	var multiplier int
+	var err error
 	for err == nil {
 		tok, lit := p.scanIgnoreWhitespace()
 
-		var r Roll
-		r, err = p.parseRoll(tok, lit, true)
-		if r != nil && multiplier != 0 {
-			switch t := r.(type) {
-			case *GroupedRoll:
-				if multiplier < 0 && t != nil {
-					t.Negative = true
+		child, childErr := p.parseRoll(tok, lit, true)
+		if child != nil && multiplier != 0 {
+			switch n := child.(type) {
+			case *groupNode:
+				if multiplier < 0 {
+					n.term.Negative = true
 				}
-				r = t
-			case *DiceRoll:
-				if t != nil {
-					t.Multiplier = multiplier
-				}
-				r = t
+			case *diceNode:
+				n.term.Multiplier = multiplier
 			}
 			multiplier = 0
 		}
 
 		if negative {
-			switch t := r.(type) {
-			case *GroupedRoll:
-				t.Negative = true
-				r = t
-			case *DiceRoll:
-				t.Multiplier *= -1
-				r = t
+			switch n := child.(type) {
+			case *groupNode:
+				n.term.Negative = true
+			case *diceNode:
+				n.term.Multiplier *= -1
 			}
 		}
 
+		err = childErr
 		if err != nil {
 			negative = false
-			// If we got an error and we have no rolls, it's definitely broken
-			if r == nil && len(roll.Rolls) == 0 {
-				return
+			if child == nil && len(node.children) == 0 {
+				return nil, err
 			}
 
-			// We got an ambiguous modifier, which means the *next* roll needs
-			// to use this modifier as it's multiplier, so store it for later
 			if e, ok := err.(ErrAmbiguousModifier); ok {
 				multiplier = int(e)
 				p.unscan()
 				err = nil
 			} else {
-				// Rollback
 				p.unscan()
 				tok, lit = p.scanIgnoreWhitespace()
-
-				// Handle separators of the group
 				switch tok {
 				case tPLUS:
 				case tMINUS:
 					negative = true
 				case tGROUPSEP:
-					// If we have multiple rolls and are in combined mode when we
-					// get a separator, then this is an invalid grouped roll
-					if len(roll.Rolls) > 1 && roll.Combined {
-						return
+					if len(node.children) > 1 && node.term.Combined {
+						return nil, err
 					}
-
-					// We aren't combining if grouping with the GROUPSEP delimiter
-					roll.Combined = false
-					// We've finished parsing a roll, so reset err for loop
+					node.term.Combined = false
 					err = nil
 				case tGROUPSTART:
-					// We've finished parsing a roll, so reset err for loop and
-					// unscan again to start us off on the new group
 					p.unscan()
 					err = nil
 				case tGROUPEND:
-					// We've exited the group, so leave loop by letting error fall
-					// through
 					err = ErrEndOfRoll(lit)
 				default:
-					// Otherwise it IS an error
-					return
+					return nil, err
 				}
 			}
 		}
 
-		// If we've ended up with a dummy roll for some reason, don't add it
-		if r != nil {
-			roll.Rolls = append(roll.Rolls, r)
+		if child != nil {
+			node.children = append(node.children, child)
 		}
 	}
 
-	// We now have the collection of rolls within the grouped roll, now we need
-	// to apply the modifiers to it
 	for {
-		// Read a modifier
 		tok, lit := p.scanIgnoreWhitespace()
-
-		// Handle modifier or EOF
 		switch tok {
 		case tPLUS, tMINUS:
 			var mod int
 			mod, err = p.parseModifier(tok)
 			if err == nil {
-				roll.Modifier += mod
+				node.term.Modifier += mod
 			} else {
 				if tok == tMINUS {
 					mod = -1
@@ -191,21 +306,15 @@ func (p *Parser) parseGroupedRoll(grouped bool) (roll *GroupedRoll, err error) {
 				tok, lit = p.scanIgnoreWhitespace()
 				switch tok {
 				case tEOF:
-					err = ErrEndOfRoll(lit)
-					return
+					return node, ErrEndOfRoll(lit)
 				case tGROUPSTART:
 					if grouped {
-						// Technically this is an end of roll, but we want to
-						// capture the multiplier to determine the sign of the
-						// next term
-						err = ErrAmbiguousModifier(mod)
-						return
+						return node, ErrAmbiguousModifier(mod)
 					}
 					return nil, ErrUnexpectedToken(lit)
 				case tGROUPEND, tGROUPSEP:
 					if grouped {
-						err = ErrEndOfRoll(lit)
-						return
+						return node, ErrEndOfRoll(lit)
 					}
 					return nil, ErrUnexpectedToken(lit)
 				default:
@@ -213,71 +322,60 @@ func (p *Parser) parseGroupedRoll(grouped bool) (roll *GroupedRoll, err error) {
 				}
 			}
 		case tKEEPHIGH, tKEEPLOW, tDROPHIGH, tDROPLOW:
-			roll.Limit, err = p.parseLimit(tok, lit)
+			node.term.Limit, err = p.parseLimit(tok, lit)
 		case tGREATER, tLESS, tEQUAL:
 			p.unscan()
-			roll.Success, err = p.parseComparison()
+			node.term.Success, err = p.parseComparison()
 		case tFAILURES:
-			roll.Failure, err = p.parseComparison()
+			node.term.Failure, err = p.parseComparison()
 		case tEOF:
-			err = ErrEndOfRoll(lit)
-			return
+			return node, ErrEndOfRoll(lit)
 		case tGROUPSEP:
 			if grouped {
-				err = ErrEndOfRoll(lit)
-				return
+				return node, ErrEndOfRoll(lit)
 			}
 			return nil, ErrUnexpectedToken(lit)
 		case tGROUPEND:
 			p.unscan()
-			err = nil
-			return
+			return node, nil
 		default:
 			return nil, ErrUnexpectedToken(lit)
 		}
 
-		// If there is an error, lets bail out
 		if err != nil {
 			return nil, err
 		}
 	}
 }
 
-// parseDiceRoll parses a DiceRoll statement
-func (p *Parser) parseDiceRoll(grouped bool) (roll *DiceRoll, err error) {
-	roll = &DiceRoll{}
+func (p *Parser) parseDiceRoll(grouped bool) (compiledNode, error) {
+	node := &diceNode{term: DiceTerm{Multiplier: 1}}
 	tok := p.buf.tok
 	lit := p.buf.lit
 
-	// If NUM, we store it as the multiplier, else we use 1
 	if tok == tNUM {
-		roll.Multiplier, _ = strconv.Atoi(lit)
+		node.term.Multiplier, _ = strconv.Atoi(lit)
 		tok, lit = p.scanIgnoreWhitespace()
 		if tok != tDIE {
 			return nil, ErrUnexpectedToken(lit)
 		}
-	} else {
-		roll.Multiplier = 1
 	}
 
-	// We will have a DIE token here, so parse it
-	if roll.Die, err = p.parseDie(lit); err != nil {
+	die, err := p.parseDie(lit)
+	if err != nil {
 		return nil, err
 	}
+	node.term.Die = die
 
-	// Next we should loop over all our modifiers and total them up
 	var mod int
 	var lastTok Token
 	for {
-		// Read a modifier
-		tok, lit := p.scanIgnoreWhitespace()
-
-		// Handle modifier or EOF
+		tok, lit = p.scanIgnoreWhitespace()
 		switch tok {
 		case tPLUS, tMINUS:
 			mod, err = p.parseModifier(tok)
 			if err == nil {
-				roll.Modifier += mod
+				node.term.Modifier += mod
 			} else {
 				if tok == tMINUS {
 					mod = -1
@@ -287,21 +385,15 @@ func (p *Parser) parseDiceRoll(grouped bool) (roll *DiceRoll, err error) {
 				tok, lit = p.scanIgnoreWhitespace()
 				switch tok {
 				case tEOF:
-					err = ErrEndOfRoll(lit)
-					return
+					return node, ErrEndOfRoll(lit)
 				case tGROUPSTART:
 					if grouped {
-						// Technically this is an end of roll, but we want to
-						// capture the multiplier to determine the sign of the
-						// next term
-						err = ErrAmbiguousModifier(mod)
-						return
+						return node, ErrAmbiguousModifier(mod)
 					}
 					return nil, ErrUnexpectedToken(lit)
 				case tGROUPEND, tGROUPSEP:
 					if grouped {
-						err = ErrEndOfRoll(lit)
-						return
+						return node, ErrEndOfRoll(lit)
 					}
 					return nil, ErrUnexpectedToken(lit)
 				default:
@@ -309,51 +401,43 @@ func (p *Parser) parseDiceRoll(grouped bool) (roll *DiceRoll, err error) {
 				}
 			}
 		case tEXPLODE, tCOMPOUND, tPENETRATE:
-			roll.Exploding, err = p.parseExplosion(tok, lit)
+			node.term.Exploding, err = p.parseExplosion(tok, lit)
 		case tKEEPHIGH, tKEEPLOW, tDROPHIGH, tDROPLOW:
-			roll.Limit, err = p.parseLimit(tok, lit)
+			node.term.Limit, err = p.parseLimit(tok, lit)
 		case tSORT:
 			switch lit {
-			case "s":
-				roll.Sort = Ascending
+			case "s", "sa":
+				node.term.Sort = Ascending
 			case "sd":
-				roll.Sort = Descending
+				node.term.Sort = Descending
 			}
 		case tREROLL:
-			var rr RerollOp
-			rr, err = p.parseReroll(lit)
-			roll.Rerolls = append(roll.Rerolls, rr)
+			var reroll RerollOp
+			reroll, err = p.parseReroll(lit)
+			node.term.Rerolls = append(node.term.Rerolls, reroll)
 		case tGREATER, tLESS, tEQUAL:
 			p.unscan()
-			roll.Success, err = p.parseComparison()
+			node.term.Success, err = p.parseComparison()
 		case tFAILURES:
-			roll.Failure, err = p.parseComparison()
+			node.term.Failure, err = p.parseComparison()
 		case tEOF:
-			err = ErrEndOfRoll(lit)
-			return
+			return node, ErrEndOfRoll(lit)
 		case tGROUPEND, tGROUPSEP:
 			if grouped {
-				err = ErrEndOfRoll(lit)
-				return
+				return node, ErrEndOfRoll(lit)
 			}
 			return nil, ErrUnexpectedToken(lit)
 		case tDIE:
-			// It's ambiguous whether or not a +/- number is a modifier or a
-			// a combined die roll. If grouped and we get a die character AND
-			// the last token processed was a modifier, then we rewind and then
-			// raise a special error to indicate it needs attention.
 			if grouped && (lastTok == tPLUS || lastTok == tMINUS) {
 				p.unscan()
-				roll.Modifier -= mod
-				err = ErrAmbiguousModifier(mod)
-				return
+				node.term.Modifier -= mod
+				return node, ErrAmbiguousModifier(mod)
 			}
 			return nil, ErrUnexpectedToken(lit)
 		default:
 			return nil, ErrUnexpectedToken(lit)
 		}
 
-		// If there is an error, lets bail out
 		if err != nil {
 			return nil, err
 		}
@@ -367,14 +451,13 @@ func (p *Parser) parseReroll(lit string) (rr RerollOp, err error) {
 		rr.Once = true
 	}
 
-	// determine the comparison operator for the reroll op
 	compOp, err := p.parseComparison()
 	if err != nil {
-		return
+		return rr, err
 	}
 
 	rr.ComparisonOp = compOp
-	return
+	return rr, nil
 }
 
 func (p *Parser) parseModifier(tok Token) (int, error) {
@@ -382,13 +465,11 @@ func (p *Parser) parseModifier(tok Token) (int, error) {
 	if tok == tMINUS {
 		mult = -1
 	}
-	// Get modifer value
 	tok, lit := p.scanIgnoreWhitespace()
 	if tok != tNUM {
 		return 0, ErrUnexpectedToken(lit)
 	}
 
-	// Add to statement modifer
 	mod, err := strconv.Atoi(lit)
 	return mod * mult, err
 }
@@ -396,12 +477,27 @@ func (p *Parser) parseModifier(tok Token) (int, error) {
 func (p *Parser) parseDie(dieCode string) (Die, error) {
 	trimmedDieCode := strings.TrimPrefix(strings.ToUpper(dieCode), "D")
 	if num, err := strconv.Atoi(trimmedDieCode); err == nil {
-		return NormalDie(num), nil
+		die := NormalDie(num)
+		if err := validateDieLimits(die, p.limits); err != nil {
+			return nil, err
+		}
+		return die, nil
 	}
 
-	// Is it a Fate/Fudge die roll?
 	if trimmedDieCode == "F" {
-		return FateDie(0), nil
+		die := FateDie(0)
+		if err := validateDieLimits(die, p.limits); err != nil {
+			return nil, err
+		}
+		return die, nil
+	}
+
+	if trimmedDieCode == "%" {
+		die := PercentileDie(0)
+		if err := validateDieLimits(die, p.limits); err != nil {
+			return nil, err
+		}
+		return die, nil
 	}
 
 	return nil, ErrUnknownDie(dieCode)
@@ -421,7 +517,6 @@ func (p *Parser) parseExplosion(tok Token, lit string) (*ExplodingOp, error) {
 		return nil, ErrUnexpectedToken(lit)
 	}
 
-	// determine the comparison operator for the explosion op
 	compOp, err := p.parseComparison()
 	if err != nil {
 		return nil, err
@@ -440,11 +535,10 @@ func (p *Parser) parseComparison() (cmp *ComparisonOp, err error) {
 	case tNUM:
 		cmp.Value, err = strconv.Atoi(lit)
 		if err != nil {
-			return
+			return nil, err
 		}
-
 		cmp.Type = Equals
-		return
+		return cmp, nil
 	case tEQUAL:
 		cmp.Type = Equals
 	case tGREATER:
@@ -452,28 +546,28 @@ func (p *Parser) parseComparison() (cmp *ComparisonOp, err error) {
 	case tLESS:
 		cmp.Type = LessThan
 	default:
-		err = ErrUnexpectedToken(lit)
-		return
+		return nil, ErrUnexpectedToken(lit)
 	}
 
 	tok, lit = p.scan()
+	if tok == tEQUAL && (cmp.Type == GreaterThan || cmp.Type == LessThan) {
+		cmp.Inclusive = true
+		tok, lit = p.scan()
+	}
 	if tok != tNUM {
-		err = ErrUnexpectedToken(lit)
-		return
+		return nil, ErrUnexpectedToken(lit)
 	}
 
 	cmp.Value, err = strconv.Atoi(lit)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	return cmp, nil
 }
 
 func (p *Parser) parseLimit(tok Token, lit string) (lmt *LimitOp, err error) {
-	lmt = &LimitOp{
-		Amount: 1,
-	}
+	lmt = &LimitOp{Amount: 1}
 
 	switch tok {
 	case tKEEPHIGH:
@@ -494,35 +588,27 @@ func (p *Parser) parseLimit(tok Token, lit string) (lmt *LimitOp, err error) {
 		lmt.Amount, err = strconv.Atoi(lit)
 	}
 
-	return
+	return lmt, err
 }
 
-// scan returns the next token from the underlying scanner.
-// If a token has been unscanned then read that instead.
 func (p *Parser) scan() (tok Token, lit string) {
-	// If we have a token on the buffer, then return it.
 	if p.buf.n != 0 {
 		p.buf.n = 0
 		return p.buf.tok, p.buf.lit
 	}
 
-	// Otherwise read the next token from the scanner.
 	tok, lit = p.s.Scan()
-
-	// Save it to the buffer in case we unscan later.
 	p.buf.tok, p.buf.lit = tok, lit
 
-	return
+	return tok, lit
 }
 
-// unscan pushes the previously read token back onto the buffer.
 func (p *Parser) unscan() { p.buf.n = 1 }
 
-// scanIgnoreWhitespace scans the next non-whitespace token.
 func (p *Parser) scanIgnoreWhitespace() (tok Token, lit string) {
 	tok, lit = p.scan()
 	if tok == tWS {
 		tok, lit = p.scan()
 	}
-	return
+	return tok, lit
 }

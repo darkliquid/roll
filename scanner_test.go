@@ -25,6 +25,7 @@ func TestScanner_Scan(t *testing.T) {
 
 		// Dice
 		{s: `d200`, tok: tDIE, lit: "d200"},
+		{s: `d%`, tok: tDIE, lit: "d%"},
 		{s: `dF`, tok: tDIE, lit: "dF"},
 		{s: `d4d5`, tok: tDIE, lit: "d4"},
 		{s: `d6!!`, tok: tDIE, lit: "d6"},
@@ -54,6 +55,7 @@ func TestScanner_Scan(t *testing.T) {
 		{s: `r`, tok: tREROLL, lit: "r"},
 		{s: `ro`, tok: tREROLL, lit: "ro"},
 		{s: `s`, tok: tSORT, lit: "s"},
+		{s: `sa`, tok: tSORT, lit: "sa"},
 		{s: `sd`, tok: tSORT, lit: "sd"},
 
 		// Tests
@@ -71,7 +73,7 @@ func TestScanner_Scan(t *testing.T) {
 		s := NewScanner(strings.NewReader(tt.s))
 		tok, lit := s.Scan()
 		if tt.tok != tok {
-			t.Errorf("%d. %q token mismatch: exp=%q got=%q <%q>", i, tt.s, tt.tok, tok, lit)
+			t.Errorf("%d. %q token mismatch: exp=%v got=%v <%q>", i, tt.s, tt.tok, tok, lit)
 		} else if tt.lit != lit {
 			t.Errorf("%d. %q literal mismatch: exp=%q got=%q", i, tt.s, tt.lit, lit)
 		}
