@@ -127,3 +127,33 @@ func TestRoll20Spec_Sorting(t *testing.T) {
 	runRoll20TestCases(t, tests)
 }
 
+func TestRoll20Spec_GroupedRolls(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "single grouped roll {3d6+4}", seed: 0, input: "{3d6+4}", wantString: "{3d6+4}", wantRolls: []int{5, 5, 6}, wantTotal: 16},
+		{name: "separated grouped roll {3d6, 2d8}", seed: 0, input: "{3d6, 2d8}", wantString: "{3d6, 2d8}", wantRolls: []int{4, 7}, wantTotal: 11},
+		{name: "combined grouped roll {3d6 + 2d8}", seed: 0, input: "{3d6 + 2d8}", wantString: "{3d6 + 2d8}", wantRolls: []int{1, 1, 2, 3, 4}, wantTotal: 11},
+		{name: "group addition modifier {3d6, 2d8}+5", seed: 0, input: "{3d6, 2d8}+5", wantString: "{3d6, 2d8}+5", wantRolls: []int{4, 7}, wantTotal: 16},
+		{name: "group subtraction modifier {3d6 + 2d8}-3", seed: 0, input: "{3d6 + 2d8}-3", wantString: "{3d6 + 2d8}-3", wantRolls: []int{1, 1, 2, 3, 4}, wantTotal: 8},
+		{name: "negated grouped roll -{3d6, 2d8}", seed: 0, input: "-{3d6, 2d8}", wantString: "-{3d6, 2d8}", wantRolls: []int{-4, -7}, wantTotal: -11},
+	}
+	runRoll20TestCases(t, tests)
+}
+
+func TestRoll20Spec_GroupingModifiers(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "group keep highest {3d6, 2d8}kh1", seed: 0, input: "{3d6, 2d8}kh1", wantString: "{3d6, 2d8}kh", wantRolls: []int{7}, wantTotal: 7},
+		{name: "group drop lowest {3d6, 2d8}dl1", seed: 0, input: "{3d6, 2d8}dl1", wantString: "{3d6, 2d8}dl", wantRolls: []int{7}, wantTotal: 7},
+		{name: "grouped successes {3d6 + 2d8}>3", seed: 0, input: "{3d6 + 2d8}>3", wantString: "{3d6 + 2d8}>3", wantRolls: []int{1, 1, 2, 3, 4}, wantScnt: 1, wantTotal: 1},
+		{name: "grouped success and failures {3d6 + 2d8}>2f=1", seed: 0, input: "{3d6 + 2d8}>2f=1", wantString: "{3d6 + 2d8}>2f=1", wantRolls: []int{1, 1, 2, 3, 4}, wantScnt: 0, wantTotal: 0},
+	}
+	runRoll20TestCases(t, tests)
+}
+
+func TestRoll20Spec_ComplexPermutations(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "multi modifier dice roll 6d6!!5kh3sd+3", seed: 2, input: "6d6!!5kh3sd+3", wantString: "6d6+3!!5kh3sd", wantRolls: []int{10, 5, 3}, wantTotal: 21},
+		{name: "complex nested combined groups", seed: 0, input: "{3d6+2d8-{4d4-1}dl}kh3<4f>3", wantString: "{3d6 + 2d8 - {4d4-1}dl}kh3<4f>3", wantRolls: []int{4, 3, 2}, wantScnt: 1, wantTotal: 1},
+		{name: "separated group with limit and failure {3d6+4, 2d8}dl=1f>5", seed: 0, input: "{3d6+4, 2d8}dl=1f>5", wantString: "{3d6+4, 2d8}dl=1f>5", wantRolls: []int{8}, wantScnt: -1, wantTotal: -1},
+	}
+	runRoll20TestCases(t, tests)
+}
