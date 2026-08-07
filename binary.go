@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	binaryMagic0 byte = 0x52 // 'R'
-	binaryMagic1 byte = 0x4F // 'O'
+	binaryMagic0  byte = 0x52 // 'R'
+	binaryMagic1  byte = 0x4F // 'O'
 	binaryVersion byte = 0x01
 )
 
@@ -91,6 +91,9 @@ func (p *Program) UnmarshalBinary(data []byte) error {
 	if err != nil {
 		return err
 	}
+	if codeLen > uint64(r.Len()) {
+		return fmt.Errorf("codeLen %d exceeds remaining data length %d", codeLen, r.Len())
+	}
 	code := make([]Instruction, codeLen)
 	for i := uint64(0); i < codeLen; i++ {
 		opByte, err := r.ReadByte()
@@ -108,6 +111,9 @@ func (p *Program) UnmarshalBinary(data []byte) error {
 	if err != nil {
 		return err
 	}
+	if diceLen > uint64(r.Len()) {
+		return fmt.Errorf("diceLen %d exceeds remaining data length %d", diceLen, r.Len())
+	}
 	diceTerms := make([]DiceTerm, diceLen)
 	for i := uint64(0); i < diceLen; i++ {
 		dt, err := unmarshalDiceTerm(r)
@@ -120,6 +126,9 @@ func (p *Program) UnmarshalBinary(data []byte) error {
 	groupLen, err := readUvarint(r)
 	if err != nil {
 		return err
+	}
+	if groupLen > uint64(r.Len()) {
+		return fmt.Errorf("groupLen %d exceeds remaining data length %d", groupLen, r.Len())
 	}
 	groupTerms := make([]GroupTerm, groupLen)
 	for i := uint64(0); i < groupLen; i++ {
@@ -283,6 +292,9 @@ func unmarshalDiceTerm(r *bytes.Reader) (dt DiceTerm, err error) {
 		if err != nil {
 			return dt, err
 		}
+		if rrLen > uint64(r.Len()) {
+			return dt, fmt.Errorf("rrLen %d exceeds remaining data length %d", rrLen, r.Len())
+		}
 		dt.Rerolls = make([]RerollOp, rrLen)
 		for i := uint64(0); i < rrLen; i++ {
 			flags, err := r.ReadByte()
@@ -439,10 +451,9 @@ func unmarshalDie(r *bytes.Reader) (Die, error) {
 func marshalComparisonOp(buf *bytes.Buffer, cmp *ComparisonOp) {
 	if cmp == nil {
 		buf.WriteByte(0)
-		buf.WriteByte(0)
-		writeVarint(buf, 0)
 		return
 	}
+	buf.WriteByte(1)
 	buf.WriteByte(byte(cmp.Type))
 	var flags byte
 	if cmp.Inclusive {
@@ -453,6 +464,13 @@ func marshalComparisonOp(buf *bytes.Buffer, cmp *ComparisonOp) {
 }
 
 func unmarshalComparisonOp(r *bytes.Reader) (*ComparisonOp, error) {
+	presence, err := r.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+	if presence == 0 {
+		return nil, nil
+	}
 	typ, err := r.ReadByte()
 	if err != nil {
 		return nil, err

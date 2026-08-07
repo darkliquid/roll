@@ -13,6 +13,7 @@ func TestBinaryMarshalUnmarshal(t *testing.T) {
 		"{3d6 + 2d8 - {4d4-1}dl}kh3<4f>3",
 		"4dF+2",
 		"d%",
+		"2d6!",
 	}
 
 	for _, expr := range expressions {

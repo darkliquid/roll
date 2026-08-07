@@ -540,6 +540,10 @@ func (p *Parser) parseExplosion(tok Token, lit string) (*ExplodingOp, error) {
 
 	compOp, err := p.parseComparison()
 	if err != nil {
+		if _, ok := err.(ErrUnexpectedToken); ok {
+			p.unscan()
+			return exp, nil
+		}
 		return nil, err
 	}
 	exp.ComparisonOp = compOp

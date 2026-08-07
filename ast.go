@@ -150,6 +150,20 @@ type ExplodingOp struct {
 	Type ExplodingType
 }
 
+// Match returns true if the given value compares positively against the exploding op.
+func (e ExplodingOp) Match(val int, die Die) bool {
+	if e.ComparisonOp != nil {
+		return e.ComparisonOp.Match(val)
+	}
+	switch d := die.(type) {
+	case NormalDie:
+		return val == int(d)
+	case PercentileDie:
+		return val == 100
+	}
+	return false
+}
+
 // String returns the string representation of the exploding dice operation.
 func (e ExplodingOp) String() (output string) {
 	switch e.Type {
@@ -161,7 +175,10 @@ func (e ExplodingOp) String() (output string) {
 		output = "!p"
 	}
 
-	return output + strings.TrimPrefix(e.ComparisonOp.String(), "=")
+	if e.ComparisonOp != nil {
+		output += strings.TrimPrefix(e.ComparisonOp.String(), "=")
+	}
+	return output
 }
 
 // LimitType is the type of roll limitation.
@@ -436,7 +453,7 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 		switch term.Exploding.Type {
 		case Exploding:
 			for _, roll := range result.Results {
-				for term.Exploding.Match(roll.Result) {
+				for term.Exploding.Match(roll.Result, term.Die) {
 					if err = ctx.recordRoll(&dieRolls); err != nil {
 						return Result{}, err
 					}
@@ -447,7 +464,7 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 		case Compounded:
 			compound := 0
 			for _, roll := range result.Results {
-				for term.Exploding.Match(roll.Result) {
+				for term.Exploding.Match(roll.Result, term.Die) {
 					compound += roll.Result
 					if err = ctx.recordRoll(&dieRolls); err != nil {
 						return Result{}, err
@@ -458,7 +475,7 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 			result.Results = append(result.Results, DieRoll{Result: compound, Symbol: strconv.Itoa(compound)})
 		case Penetrating:
 			for _, roll := range result.Results {
-				for term.Exploding.Match(roll.Result) {
+				for term.Exploding.Match(roll.Result, term.Die) {
 					if err = ctx.recordRoll(&dieRolls); err != nil {
 						return Result{}, err
 					}
