@@ -69,6 +69,7 @@ func TestFilterComponentsByPrefix(t *testing.T) {
 			{"token d in middle", "4d6", 2, "d"},
 			{"space prefix", "4d6 + 2d", 8, "d"},
 			{"cursor beyond end clamped", "4d6k", 10, "k"},
+			{"negative cursor clamped to 0", "4d6k", -1, ""},
 		}
 
 		for _, tt := range tests {
@@ -105,6 +106,24 @@ func TestFilterComponentsByPrefix(t *testing.T) {
 				input:          "4d6r",
 				cursor:         4,
 				expectedSyntax: []string{"r", "ro"},
+			},
+			{
+				name:           "match by name Keep filters kh and kl",
+				input:          "Keep",
+				cursor:         4,
+				expectedSyntax: []string{"kh", "kl"},
+			},
+			{
+				name:           "case-insensitive KH matches kh",
+				input:          "KH",
+				cursor:         2,
+				expectedSyntax: []string{"kh"},
+			},
+			{
+				name:           "negative cursor returns full catalog",
+				input:          "4d6k",
+				cursor:         -1,
+				expectedSyntax: nil,
 			},
 			{
 				name:           "empty prefix returns full catalog",

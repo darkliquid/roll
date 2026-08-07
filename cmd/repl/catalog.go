@@ -175,35 +175,40 @@ func DefaultCatalog() []Component {
 
 // ExtractTargetToken extracts the prefix token at or before the cursor position in input.
 func ExtractTargetToken(input string, cursor int) string {
+	if input == "" {
+		return ""
+	}
+	runes := []rune(input)
 	if cursor < 0 {
 		cursor = 0
 	}
-	if cursor > len(input) {
-		cursor = len(input)
+	if cursor > len(runes) {
+		cursor = len(runes)
 	}
-
-	sub := input[:cursor]
-	if len(sub) == 0 {
+	if cursor == 0 {
 		return ""
 	}
 
-	runes := []rune(sub)
-	lastIndex := len(runes) - 1
-
-	if unicode.IsDigit(runes[lastIndex]) || unicode.IsSpace(runes[lastIndex]) {
+	if unicode.IsDigit(runes[cursor-1]) || unicode.IsSpace(runes[cursor-1]) {
 		return ""
 	}
 
-	var tokenRunes []rune
-	for i := lastIndex; i >= 0; i-- {
-		r := runes[i]
-		if unicode.IsDigit(r) || unicode.IsSpace(r) {
+	start := cursor - 1
+	for start >= 0 {
+		ch := runes[start]
+		if unicode.IsDigit(ch) || unicode.IsSpace(ch) || ch == '+' || ch == '-' || ch == ',' {
+			start++
 			break
 		}
-		tokenRunes = append([]rune{r}, tokenRunes...)
+		if start == 0 {
+			break
+		}
+		start--
 	}
-
-	return string(tokenRunes)
+	if start < 0 {
+		start = 0
+	}
+	return string(runes[start:cursor])
 }
 
 // FilterComponents returns catalog components whose Syntax or Name starts with prefix token at cursor.
