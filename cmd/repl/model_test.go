@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -296,6 +297,33 @@ func TestAutocompleteViewRendersHelpBox(t *testing.T) {
 	}
 	if !strings.Contains(content, selected.Description) {
 		t.Errorf("expected view content to contain selected component description %q, got:\n%s", selected.Description, content)
+	}
+
+	lines := strings.Split(content, "\n")
+	var helpBoxLines []string
+	inHelpBox := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "┌") {
+			inHelpBox = true
+		}
+		if inHelpBox {
+			helpBoxLines = append(helpBoxLines, line)
+		}
+		if strings.HasPrefix(line, "└") {
+			inHelpBox = false
+		}
+	}
+
+	if len(helpBoxLines) < 5 {
+		t.Fatalf("expected at least 5 lines in help box, got %d", len(helpBoxLines))
+	}
+
+	expectedLen := utf8.RuneCountInString(helpBoxLines[0])
+	for i, line := range helpBoxLines {
+		lineLen := utf8.RuneCountInString(line)
+		if lineLen != expectedLen {
+			t.Errorf("help box line %d (%q) has rune count %d, expected %d", i, line, lineLen, expectedLen)
+		}
 	}
 }
 

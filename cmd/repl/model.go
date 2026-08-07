@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/darkliquid/roll"
@@ -347,6 +348,10 @@ func (m model) renderCompletion() string {
 		return ""
 	}
 
+	if m.completionIndex < 0 || m.completionIndex >= len(m.completionItems) {
+		m.completionIndex = 0
+	}
+
 	var builder strings.Builder
 	builder.WriteString("\nCompletion options (Tab/Down select, Enter insert, Esc cancel):\n")
 
@@ -367,13 +372,25 @@ func (m model) renderCompletion() string {
 	}
 
 	selected := m.completionItems[m.completionIndex]
-	builder.WriteString("\n┌─ Help: " + selected.Name + " " + strings.Repeat("─", max(2, 50-len(selected.Name))) + "┐\n")
-	builder.WriteString(fmt.Sprintf("│ Syntax:      %-50s │\n", selected.Syntax))
-	builder.WriteString(fmt.Sprintf("│ Description: %-50s │\n", selected.Description))
-	builder.WriteString(fmt.Sprintf("│ Example:     %-50s │\n", selected.Example))
-	builder.WriteString("└" + strings.Repeat("─", 66) + "┘\n")
+	innerWidth := 64
+	topPad := max(0, innerWidth-9-utf8.RuneCountInString(selected.Name))
+	builder.WriteString("\n┌─ Help: " + selected.Name + " " + strings.Repeat("─", topPad) + "┐\n")
+
+	valWidth := innerWidth - 2 - 13
+	builder.WriteString("│ Syntax:      " + padTo(selected.Syntax, valWidth) + " │\n")
+	builder.WriteString("│ Description: " + padTo(selected.Description, valWidth) + " │\n")
+	builder.WriteString("│ Example:     " + padTo(selected.Example, valWidth) + " │\n")
+	builder.WriteString("└" + strings.Repeat("─", innerWidth) + "┘\n")
 
 	return builder.String()
+}
+
+func padTo(s string, width int) string {
+	runes := []rune(s)
+	if len(runes) >= width {
+		return string(runes[:width])
+	}
+	return s + strings.Repeat(" ", width-len(runes))
 }
 
 
