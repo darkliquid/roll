@@ -208,14 +208,35 @@ func renderDiceTerm(term DiceTerm) string {
 }
 
 func (p *Parser) parseRoll(tok Token, lit string, grouped bool) (compiledNode, error) {
+	sign := 1
+	if tok == tPLUS {
+		tok, lit = p.scanIgnoreWhitespace()
+	} else if tok == tMINUS {
+		sign = -1
+		tok, lit = p.scanIgnoreWhitespace()
+	}
+
+	var node compiledNode
+	var err error
 	switch tok {
 	case tNUM, tDIE:
-		return p.parseDiceRoll(grouped)
+		node, err = p.parseDiceRoll(grouped)
 	case tGROUPSTART:
-		return p.parseGroupedRoll(grouped)
+		node, err = p.parseGroupedRoll(grouped)
 	default:
 		return nil, ErrUnexpectedToken(lit)
 	}
+
+	if node != nil && sign == -1 {
+		switch n := node.(type) {
+		case *groupNode:
+			n.term.Negative = true
+		case *diceNode:
+			n.term.Multiplier *= -1
+		}
+	}
+
+	return node, err
 }
 
 func (p *Parser) parseGroupedRoll(grouped bool) (compiledNode, error) {

@@ -65,6 +65,8 @@ func TestRoll20Spec_BasicDice(t *testing.T) {
 		{name: "dice with addition 3d6+4", seed: 0, input: "3d6+4", wantString: "3d6+4", wantRolls: []int{1, 1, 2}, wantTotal: 8},
 		{name: "dice with subtraction 2d8-2", seed: 0, input: "2d8-2", wantString: "2d8-2", wantRolls: []int{3, 3}, wantTotal: 4},
 		{name: "dice without modifier 2d8", seed: 0, input: "2d8", wantString: "2d8", wantRolls: []int{3, 3}, wantTotal: 6},
+		{name: "positive multiplier +3d6", seed: 0, input: "+3d6", wantString: "3d6", wantRolls: []int{1, 1, 2}, wantTotal: 4},
+		{name: "negative multiplier -2d8", seed: 0, input: "-2d8", wantString: "-2d8", wantRolls: []int{3, 3}, wantTotal: -6},
 	}
 	runRoll20TestCases(t, tests)
 }
