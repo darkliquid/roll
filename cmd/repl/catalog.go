@@ -126,7 +126,7 @@ func DefaultCatalog() []Component {
 			Name:        "Target Less Than",
 			Syntax:      "<",
 			Template:    "<",
-			Category:    "<",
+			Category:    "Target/Success",
 			Description: "Count successes less than target",
 			Example:     "4d6<3",
 		},
