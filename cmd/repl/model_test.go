@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -267,5 +268,36 @@ func TestAutocompleteEnterInsertsComponent(t *testing.T) {
 		t.Fatalf("expected cursor 3, got %d", m.cursor)
 	}
 }
+
+func TestAutocompleteViewRendersHelpBox(t *testing.T) {
+	m := newModel()
+	m.input = []rune("4d")
+	m.cursor = 2
+	m.completionActive = true
+	m.completionItems = FilterComponents(m.catalog, string(m.input), m.cursor)
+	m.completionIndex = 0
+
+	view := m.View()
+	content := view.Content
+
+	if !strings.Contains(content, "Completion options") {
+		t.Errorf("expected view content to contain 'Completion options', got:\n%s", content)
+	}
+	if !strings.Contains(content, "Help:") {
+		t.Errorf("expected view content to contain 'Help:', got:\n%s", content)
+	}
+
+	selected := m.completionItems[0]
+	if !strings.Contains(content, selected.Name) {
+		t.Errorf("expected view content to contain selected component name %q, got:\n%s", selected.Name, content)
+	}
+	if !strings.Contains(content, selected.Syntax) {
+		t.Errorf("expected view content to contain selected component syntax %q, got:\n%s", selected.Syntax, content)
+	}
+	if !strings.Contains(content, selected.Description) {
+		t.Errorf("expected view content to contain selected component description %q, got:\n%s", selected.Description, content)
+	}
+}
+
 
 

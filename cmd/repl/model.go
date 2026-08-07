@@ -319,6 +319,7 @@ func (m model) View() tea.View {
 	builder.WriteString("Enter a dice expression and press Enter.\n")
 	builder.WriteString("Keys: q/esc/ctrl+c quit, up/down browse history, ctrl+v paste clipboard, left/right move, backspace/delete edit, ctrl+u clear.\n\n")
 	builder.WriteString(m.renderInput())
+	builder.WriteString(m.renderCompletion())
 	builder.WriteString("\n\nRecent rolls:\n")
 
 	if len(m.history) == 0 {
@@ -340,6 +341,41 @@ func (m model) View() tea.View {
 	view.AltScreen = true
 	return view
 }
+
+func (m model) renderCompletion() string {
+	if !m.completionActive || len(m.completionItems) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.WriteString("\nCompletion options (Tab/Down select, Enter insert, Esc cancel):\n")
+
+	maxVisible := 5
+	start := 0
+	if m.completionIndex >= maxVisible {
+		start = m.completionIndex - maxVisible + 1
+	}
+	end := min(start+maxVisible, len(m.completionItems))
+
+	for i := start; i < end; i++ {
+		item := m.completionItems[i]
+		prefix := "  "
+		if i == m.completionIndex {
+			prefix = "> "
+		}
+		builder.WriteString(fmt.Sprintf("%s[%-3s] %-25s (%s)\n", prefix, item.Syntax, item.Name, item.Category))
+	}
+
+	selected := m.completionItems[m.completionIndex]
+	builder.WriteString("\n┌─ Help: " + selected.Name + " " + strings.Repeat("─", max(2, 50-len(selected.Name))) + "┐\n")
+	builder.WriteString(fmt.Sprintf("│ Syntax:      %-50s │\n", selected.Syntax))
+	builder.WriteString(fmt.Sprintf("│ Description: %-50s │\n", selected.Description))
+	builder.WriteString(fmt.Sprintf("│ Example:     %-50s │\n", selected.Example))
+	builder.WriteString("└" + strings.Repeat("─", 66) + "┘\n")
+
+	return builder.String()
+}
+
 
 func (m model) renderInput() string {
 	var builder strings.Builder
