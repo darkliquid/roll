@@ -84,3 +84,46 @@ func TestRoll20Spec_TargetNumbers(t *testing.T) {
 	}
 	runRoll20TestCases(t, tests)
 }
+
+func TestRoll20Spec_ExplodingDice(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "exploding dice 2d6!5", seed: 2, input: "2d6!5", wantString: "2d6!5", wantRolls: []int{5, 1, 1}, wantTotal: 7},
+		{name: "exploding greater than 2d6!>4", seed: 2, input: "2d6!>4", wantString: "2d6!>4", wantRolls: []int{5, 1, 1}, wantTotal: 7},
+		{name: "compounded exploding 2d6!!5", seed: 2, input: "2d6!!5", wantString: "2d6!!5", wantRolls: []int{5, 1, 5}, wantTotal: 11},
+		{name: "compounded greater than 2d6!!>4", seed: 2, input: "2d6!!>4", wantString: "2d6!!>4", wantRolls: []int{5, 1, 5}, wantTotal: 11},
+		{name: "penetrating exploding 2d6!p5", seed: 2, input: "2d6!p5", wantString: "2d6!p5", wantRolls: []int{5, 1, 0}, wantTotal: 6},
+		{name: "penetrating greater than 2d6!p>4", seed: 2, input: "2d6!p>4", wantString: "2d6!p>4", wantRolls: []int{5, 1, 0}, wantTotal: 6},
+	}
+	runRoll20TestCases(t, tests)
+}
+
+func TestRoll20Spec_KeepDrop(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "keep highest 4d6kh3", seed: 2, input: "4d6kh3", wantString: "4d6kh3", wantRolls: []int{5, 3, 1}, wantTotal: 9},
+		{name: "keep lowest 4d6kl2", seed: 2, input: "4d6kl2", wantString: "4d6kl2", wantRolls: []int{1, 1}, wantTotal: 2},
+		{name: "drop highest 4d6dh1", seed: 2, input: "4d6dh1", wantString: "4d6dh", wantRolls: []int{3, 1, 1}, wantTotal: 5},
+		{name: "drop lowest 4d6dl1", seed: 2, input: "4d6dl1", wantString: "4d6dl", wantRolls: []int{5, 3, 1}, wantTotal: 9},
+		{name: "keep highest with modifier 4d6kh3+2", seed: 2, input: "4d6kh3+2", wantString: "4d6+2kh3", wantRolls: []int{5, 3, 1}, wantTotal: 11},
+	}
+	runRoll20TestCases(t, tests)
+}
+
+func TestRoll20Spec_Reroll(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "reroll once 4d6ro<4", seed: 2, input: "4d6ro<4", wantString: "4d6ro<4", wantRolls: []int{5, 3, 3, 5}, wantTotal: 16},
+		{name: "reroll once exact 4d6ro1", seed: 2, input: "4d6ro1", wantString: "4d6ro1", wantRolls: []int{5, 3, 3, 3}, wantTotal: 14},
+		{name: "recursive reroll 4d6r1", seed: 2, input: "4d6r1", wantString: "4d6r1", wantRolls: []int{5, 3, 3, 3}, wantTotal: 14},
+		{name: "recursive reroll comparison 4d6r<2", seed: 2, input: "4d6r<2", wantString: "4d6r<2", wantRolls: []int{5, 3, 3, 3}, wantTotal: 14},
+	}
+	runRoll20TestCases(t, tests)
+}
+
+func TestRoll20Spec_Sorting(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "ascending sort 3d3s", seed: 1, input: "3d3s", wantString: "3d3s", wantRolls: []int{1, 3, 3}, wantTotal: 7},
+		{name: "ascending sort alias 3d3sa", seed: 1, input: "3d3sa", wantString: "3d3s", wantRolls: []int{1, 3, 3}, wantTotal: 7},
+		{name: "descending sort 3d3sd", seed: 1, input: "3d3sd", wantString: "3d3sd", wantRolls: []int{3, 3, 1}, wantTotal: 7},
+	}
+	runRoll20TestCases(t, tests)
+}
+
