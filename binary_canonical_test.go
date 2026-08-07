@@ -82,3 +82,42 @@ func TestBinaryUnmarshalCorrupted(t *testing.T) {
 		}
 	})
 }
+
+func TestCanonicalize(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "1d20", want: "d20"},
+		{input: "3d6+4", want: "3d6+4"},
+		{input: "1d%", want: "d%"},
+		{input: "4dF+2", want: "4dF+2"},
+		{input: "4d6s>4kh3", want: "4d6kh3>4s"},
+		{input: "6d6sa>=5", want: "6d6>=5s"},
+		{input: "{2d8 + 3d6}", want: "{3d6 + 2d8}"},
+		{input: "{3d6, 2d8}", want: "{3d6, 2d8}"},
+		{input: "{3d6+4, 2d8}dl=1f>5", want: "{3d6+4, 2d8}dl=1f>5"},
+		{input: "{3d6+2d8-{4d4-1}dl}kh3<4f>3", want: "{3d6 + 2d8 - {4d4-1}dl}kh3<4f>3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := Canonicalize(tt.input)
+			if err != nil {
+				t.Fatalf("Canonicalize error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("Canonicalize mismatch:\ngot:  %q\nwant: %q", got, tt.want)
+			}
+
+			// Verify Canonical() method on Program produces identical output
+			prog, err := CompileString(tt.input)
+			if err != nil {
+				t.Fatalf("CompileString error: %v", err)
+			}
+			if pGot := prog.Canonical(); pGot != tt.want {
+				t.Errorf("Program.Canonical mismatch:\ngot:  %q\nwant: %q", pGot, tt.want)
+			}
+		})
+	}
+}
