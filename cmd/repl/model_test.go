@@ -181,3 +181,91 @@ func TestModelSubmitStoresHistoryWithoutImmediateDuplicate(t *testing.T) {
 		t.Fatalf("expected duplicate submission to be coalesced, got %#v", updated.historyInputs)
 	}
 }
+
+func TestAutocompleteTabTogglesAndNavigates(t *testing.T) {
+	m := newModel()
+	m.input = []rune("4d")
+	m.cursor = 2
+
+	// Press Tab to activate completion
+	updatedModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m = updatedModel.(model)
+
+	if !m.completionActive {
+		t.Fatal("expected completion to be active after Tab")
+	}
+	if len(m.completionItems) == 0 {
+		t.Fatal("expected completion items to be populated")
+	}
+	if m.completionIndex != 0 {
+		t.Fatalf("expected completionIndex 0, got %d", m.completionIndex)
+	}
+
+	// Press Tab again to cycle forward
+	updatedModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m = updatedModel.(model)
+
+	if m.completionIndex != 1 {
+		t.Fatalf("expected completionIndex 1 after second Tab, got %d", m.completionIndex)
+	}
+
+	// Press Down to cycle forward
+	updatedModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = updatedModel.(model)
+
+	if m.completionIndex != 2 {
+		t.Fatalf("expected completionIndex 2 after Down, got %d", m.completionIndex)
+	}
+
+	// Press Up to cycle backward
+	updatedModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	m = updatedModel.(model)
+
+	if m.completionIndex != 1 {
+		t.Fatalf("expected completionIndex 1 after Up, got %d", m.completionIndex)
+	}
+
+	// Press Esc to deactivate completion
+	updatedModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = updatedModel.(model)
+
+	if m.completionActive {
+		t.Fatal("expected completion to be inactive after Esc")
+	}
+	if m.quitting {
+		t.Fatal("expected Esc while completion active to not quit model")
+	}
+}
+
+func TestAutocompleteEnterInsertsComponent(t *testing.T) {
+	m := newModel()
+	m.input = []rune("4d")
+	m.cursor = 2
+
+	// Press Tab to activate completion
+	updatedModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m = updatedModel.(model)
+
+	if !m.completionActive {
+		t.Fatal("expected completion to be active")
+	}
+
+	// Press Enter to apply completion
+	updatedModel, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = updatedModel.(model)
+
+	if cmd != nil {
+		t.Fatal("expected no roll submission cmd on completion apply")
+	}
+	if m.completionActive {
+		t.Fatal("expected completion to be closed after Enter")
+	}
+	if string(m.input) != "4d6" {
+		t.Fatalf("expected input '4d6', got %q", string(m.input))
+	}
+	if m.cursor != 3 {
+		t.Fatalf("expected cursor 3, got %d", m.cursor)
+	}
+}
+
+

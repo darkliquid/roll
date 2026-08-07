@@ -23,21 +23,26 @@ type rollResultMsg struct {
 }
 
 type model struct {
-	input          []rune
-	cursor         int
-	history        []historyEntry
-	historyInputs  []string
-	historyIndex   int
-	historyDraft   string
-	quitting       bool
-	evaluator      func(string) (string, error)
-	clipboardReady func() tea.Msg
+	input            []rune
+	cursor           int
+	history          []historyEntry
+	historyInputs    []string
+	historyIndex     int
+	historyDraft     string
+	quitting         bool
+	evaluator        func(string) (string, error)
+	clipboardReady   func() tea.Msg
+	catalog          []Component
+	completionActive bool
+	completionItems  []Component
+	completionIndex   int
 }
 
 func newModel() model {
 	return model{
 		evaluator:      evaluateExpression,
 		clipboardReady: tea.ReadClipboard,
+		catalog:        DefaultCatalog(),
 	}
 }
 
@@ -53,10 +58,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "ctrl+c", "esc", "q":
+		case "ctrl+c", "q":
 			m.quitting = true
 			return m, tea.Quit
+		case "esc":
+			if m.completionActive {
+				m.completionActive = false
+				return m, nil
+			}
+			m.quitting = true
+			return m, tea.Quit
+		case "tab", "ctrl+space", "ctrl+ ":
+			if m.completionActive {
+				if len(m.completionItems) > 0 {
+					m.completionIndex = (m.completionIndex + 1) % len(m.completionItems)
+				}
+			} else {
+				items := FilterComponents(m.catalog, string(m.input), m.cursor)
+				if len(items) > 0 {
+					m.completionActive = true
+					m.completionItems = items
+					m.completionIndex = 0
+				}
+			}
+			return m, nil
 		case "enter":
+			if m.completionActive {
+				m.applyCompletion()
+				return m, nil
+			}
 			expression := strings.TrimSpace(string(m.input))
 			if expression == "" {
 				return m, nil
@@ -67,10 +97,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resetHistoryNavigation()
 			return m, m.submitRoll(expression)
 		case "up", "ctrl+p":
-			m.navigateHistory(-1)
+			if m.completionActive {
+				if len(m.completionItems) > 0 {
+					m.completionIndex = (m.completionIndex - 1 + len(m.completionItems)) % len(m.completionItems)
+				}
+			} else {
+				m.navigateHistory(-1)
+			}
 			return m, nil
 		case "down", "ctrl+n":
-			m.navigateHistory(1)
+			if m.completionActive {
+				if len(m.completionItems) > 0 {
+					m.completionIndex = (m.completionIndex + 1) % len(m.completionItems)
+				}
+			} else {
+				m.navigateHistory(1)
+			}
 			return m, nil
 		case "ctrl+v":
 			return m, func() tea.Msg {
@@ -79,33 +121,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "left", "ctrl+b":
 			if m.cursor > 0 {
 				m.cursor--
+				m.refilterCompletion()
 			}
 			return m, nil
 		case "right", "ctrl+f":
 			if m.cursor < len(m.input) {
 				m.cursor++
+				m.refilterCompletion()
 			}
 			return m, nil
 		case "home", "ctrl+a":
 			m.cursor = 0
+			m.refilterCompletion()
 			return m, nil
 		case "end", "ctrl+e":
 			m.cursor = len(m.input)
+			m.refilterCompletion()
 			return m, nil
 		case "backspace":
 			if m.cursor > 0 {
 				m.input = append(m.input[:m.cursor-1], m.input[m.cursor:]...)
 				m.cursor--
+				m.refilterCompletion()
 			}
 			return m, nil
 		case "delete":
 			if m.cursor < len(m.input) {
 				m.input = append(m.input[:m.cursor], m.input[m.cursor+1:]...)
+				m.refilterCompletion()
 			}
 			return m, nil
 		case "ctrl+u":
 			m.input = nil
 			m.cursor = 0
+			m.completionActive = false
 			m.resetHistoryNavigation()
 			return m, nil
 		default:
@@ -162,6 +211,57 @@ func (m *model) insertRunes(runes []rune) {
 	updated = append(updated, m.input[m.cursor:]...)
 	m.input = updated
 	m.cursor += len(runes)
+	m.refilterCompletion()
+}
+
+func (m *model) refilterCompletion() {
+	if !m.completionActive {
+		return
+	}
+	m.completionItems = FilterComponents(m.catalog, string(m.input), m.cursor)
+	if len(m.completionItems) == 0 {
+		m.completionActive = false
+		m.completionIndex = 0
+	} else if m.completionIndex >= len(m.completionItems) {
+		m.completionIndex = 0
+	}
+}
+
+func (m *model) applyCompletion() {
+	if !m.completionActive || len(m.completionItems) == 0 {
+		m.completionActive = false
+		return
+	}
+
+	if m.completionIndex < 0 || m.completionIndex >= len(m.completionItems) {
+		m.completionIndex = 0
+	}
+	comp := m.completionItems[m.completionIndex]
+
+	token := ExtractTargetToken(string(m.input), m.cursor)
+	tokenRunesLen := len([]rune(token))
+
+	tokenStart := m.cursor - tokenRunesLen
+	if tokenStart < 0 {
+		tokenStart = 0
+	}
+
+	prefix := make([]rune, tokenStart)
+	copy(prefix, m.input[:tokenStart])
+
+	templateRunes := []rune(comp.Template)
+
+	suffix := make([]rune, len(m.input)-m.cursor)
+	copy(suffix, m.input[m.cursor:])
+
+	updated := make([]rune, 0, len(prefix)+len(templateRunes)+len(suffix))
+	updated = append(updated, prefix...)
+	updated = append(updated, templateRunes...)
+	updated = append(updated, suffix...)
+
+	m.input = updated
+	m.cursor = tokenStart + len(templateRunes)
+	m.completionActive = false
 }
 
 func (m *model) rememberExpression(expression string) {
