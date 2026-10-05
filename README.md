@@ -1,4 +1,4 @@
-# Roll [![Go Report Card](https://goreportcard.com/badge/github.com/darkliquid/roll)](https://goreportcard.com/report/github.com/darkliquid/roll) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/darkliquid/roll/blob/master/LICENSE) [![GoDoc](https://godoc.org/github.com/darkliquid/roll?status.svg)](https://godoc.org/github.com/darkliquid/roll) [![CI](https://github.com/darkliquid/roll/actions/workflows/ci.yml/badge.svg)](https://github.com/darkliquid/roll/actions/workflows/ci.yml)
+# Roll [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/darkliquid/roll/blob/master/LICENSE) [![GoDoc](https://godoc.org/github.com/darkliquid/roll?status.svg)](https://godoc.org/github.com/darkliquid/roll) [![CI](https://github.com/darkliquid/roll/actions/workflows/ci.yml/badge.svg)](https://github.com/darkliquid/roll/actions/workflows/ci.yml)
 
 A simple dice roll compiler and VM that (mostly) supports the [Roll20 Dice Rolling Language Specification][1]
 
