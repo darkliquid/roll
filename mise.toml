@@ -1,0 +1,20 @@
+[tools]
+go = "1.27.1"
+
+[tasks.build-wasm]
+description = "Build WebAssembly binary and copy wasm_exec.js for GitHub Pages"
+run = """
+set -euo pipefail
+mkdir -p docs
+GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o docs/roll.wasm ./cmd/wasm
+GOROOT="$(go env GOROOT)"
+if [ -f "$GOROOT/lib/wasm/wasm_exec.js" ]; then
+  cp "$GOROOT/lib/wasm/wasm_exec.js" docs/wasm_exec.js
+elif [ -f "$GOROOT/misc/wasm/wasm_exec.js" ]; then
+  cp "$GOROOT/misc/wasm/wasm_exec.js" docs/wasm_exec.js
+else
+  echo "Error: wasm_exec.js not found in GOROOT ($GOROOT)" >&2
+  exit 1
+fi
+echo "Successfully built docs/roll.wasm and synced docs/wasm_exec.js"
+"""
