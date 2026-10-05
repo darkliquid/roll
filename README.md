@@ -47,4 +47,19 @@ if err != nil {
 fmt.Println(program.String(), result.Total)
 ```
 
+## Web (GitHub Pages)
+
+An interactive, fully client-side version runs in the browser via WebAssembly
+at <https://darkliquid.github.io/roll/>.
+
+To build the site locally:
+
+```bash
+mise run build-wasm
+```
+
+This compiles `cmd/wasm` to `docs/roll.wasm` and copies Go's `wasm_exec.js`
+into `docs/`. The static site can then be served from `docs/` with any file
+server, for example `python3 -m http.server --directory docs`.
+
 [1]:https://wiki.roll20.net/Dice_Reference
