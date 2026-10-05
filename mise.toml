@@ -9,7 +9,7 @@ run = """
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p docs
-GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o docs/roll.wasm ./cmd/wasm
+GOOS=js GOARCH=wasm go build -trimpath -buildvcs=false -ldflags="-s -w" -o docs/roll.wasm ./cmd/wasm
 GOROOT="$(go env GOROOT)"
 if [ -f "$GOROOT/lib/wasm/wasm_exec.js" ]; then
   cp "$GOROOT/lib/wasm/wasm_exec.js" docs/wasm_exec.js
