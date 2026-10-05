@@ -386,6 +386,13 @@
 
   .modal-body p { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--text-muted); }
 
+  .modal-body a {
+    color: var(--d20-red);
+    text-decoration: none;
+  }
+
+  .modal-body a:hover { text-decoration: underline; }
+
   .chips { display: flex; flex-wrap: wrap; gap: 0.45rem; }
 
   .chip {
@@ -530,6 +537,10 @@
           <button type="button" class="chip" data-expr="{4d6, 2d8}">{4d6, 2d8}</button>
           <button type="button" class="chip" data-expr="{4d6, 2d8}&gt;4">{4d6, 2d8}&gt;4</button>
         </div>
+      </section>
+      <section>
+        <h3>Reference</h3>
+        <p>Based on the <a href="https://wiki.roll20.net/Dice_Reference" rel="noopener">Roll20 Dice Rolling Language Specification</a>.</p>
       </section>
     </div>
   </dialog>
