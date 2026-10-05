@@ -120,16 +120,29 @@
     margin-top: 1rem;
   }
 
-  .logo-die { width: 92px; height: 92px; filter: drop-shadow(0 2px 6px rgba(197, 34, 31, 0.35)); }
+  .logo-die {
+    width: 96px;
+    height: 96px;
+    filter: drop-shadow(0 8px 18px rgba(197, 34, 31, 0.3));
+  }
 
-  .die-outer { fill: var(--d20-red); }
-  .die-inner { fill: var(--d20-red-hover); }
-  .die-edge { stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.5; }
+  .facet {
+    stroke: color-mix(in srgb, var(--d20-red) 45%, white);
+    stroke-width: 1.1;
+    stroke-linejoin: round;
+  }
+
+  .facet--front  { fill: var(--d20-red); }
+  .facet--left   { fill: color-mix(in srgb, var(--d20-red) 84%, white); }
+  .facet--right  { fill: color-mix(in srgb, var(--d20-red) 80%, black); }
+  .facet--bottom { fill: color-mix(in srgb, var(--d20-red) 64%, black); }
+
   .die-numeral {
     fill: #ffffff;
     font-family: inherit;
-    font-size: 24px;
+    font-size: 27px;
     font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   .wordmark {
@@ -405,17 +418,11 @@
   <main>
     <div class="hero">
       <svg class="logo-die" viewBox="0 0 120 120" role="img" aria-label="A twenty-sided die">
-        <polygon class="die-outer" points="60,4 107,31 107,89 60,116 13,89 13,31"/>
-        <polygon class="die-inner" points="60,30 88,76 32,76"/>
-        <g class="die-edge" fill="none">
-          <line x1="60" y1="4" x2="60" y2="30"/>
-          <line x1="13" y1="31" x2="32" y2="76"/>
-          <line x1="107" y1="31" x2="88" y2="76"/>
-          <line x1="13" y1="89" x2="32" y2="76"/>
-          <line x1="107" y1="89" x2="88" y2="76"/>
-          <line x1="60" y1="116" x2="60" y2="76"/>
-        </g>
-        <text class="die-numeral" x="60" y="68" text-anchor="middle">20</text>
+        <polygon class="facet facet--left" points="60,8 15,34 15,86"/>
+        <polygon class="facet facet--right" points="60,8 105,34 105,86"/>
+        <polygon class="facet facet--bottom" points="15,86 60,112 105,86"/>
+        <polygon class="facet facet--front" points="60,8 105,86 15,86"/>
+        <text class="die-numeral" x="60" y="70" text-anchor="middle">20</text>
       </svg>
       <div class="wordmark">R<span class="o">o</span>ll</div>
     </div>
