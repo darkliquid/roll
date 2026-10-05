@@ -326,6 +326,3 @@ func TestAutocompleteViewRendersHelpBox(t *testing.T) {
 		}
 	}
 }
-
-
-

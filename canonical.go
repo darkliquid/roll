@@ -89,7 +89,7 @@ func canonicalizeDiceTerm(term DiceTerm) string {
 
 	// Multiplier & Die
 	if term.Multiplier > 1 || term.Multiplier < -1 {
-		output.WriteString(fmt.Sprintf("%+d", term.Multiplier))
+		fmt.Fprintf(&output, "%+d", term.Multiplier)
 	} else if term.Multiplier == -1 {
 		output.WriteString("-")
 	} else if term.Multiplier == 1 {
@@ -101,7 +101,7 @@ func canonicalizeDiceTerm(term DiceTerm) string {
 
 	// Term modifier
 	if term.Modifier != 0 {
-		output.WriteString(fmt.Sprintf("%+d", term.Modifier))
+		fmt.Fprintf(&output, "%+d", term.Modifier)
 	}
 
 	// Rerolls (sorted lexicographically by string)

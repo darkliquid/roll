@@ -175,7 +175,7 @@ func (n *groupNode) maxDepth() int {
 func renderDiceTerm(term DiceTerm) string {
 	var output strings.Builder
 	if term.Multiplier > 1 || term.Multiplier < -1 {
-		output.WriteString(fmt.Sprintf("%+d", term.Multiplier))
+		fmt.Fprintf(&output, "%+d", term.Multiplier)
 	} else if term.Multiplier == -1 {
 		output.WriteString("-")
 	} else if term.Multiplier == 1 {
@@ -185,7 +185,7 @@ func renderDiceTerm(term DiceTerm) string {
 	output.WriteString(term.Die.String())
 
 	if term.Modifier != 0 {
-		output.WriteString(fmt.Sprintf("%+d", term.Modifier))
+		fmt.Fprintf(&output, "%+d", term.Modifier)
 	}
 	for _, reroll := range term.Rerolls {
 		output.WriteString(reroll.String())
@@ -209,9 +209,10 @@ func renderDiceTerm(term DiceTerm) string {
 
 func (p *Parser) parseRoll(tok Token, lit string, grouped bool) (compiledNode, error) {
 	sign := 1
-	if tok == tPLUS {
+	switch tok {
+	case tPLUS:
 		tok, lit = p.scanIgnoreWhitespace()
-	} else if tok == tMINUS {
+	case tMINUS:
 		sign = -1
 		tok, lit = p.scanIgnoreWhitespace()
 	}

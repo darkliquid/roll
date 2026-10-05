@@ -36,7 +36,7 @@ type model struct {
 	catalog          []Component
 	completionActive bool
 	completionItems  []Component
-	completionIndex   int
+	completionIndex  int
 }
 
 func newModel() model {
@@ -332,10 +332,10 @@ func (m model) View() tea.View {
 
 	for _, entry := range m.history[:min(len(m.history), visibleHistory)] {
 		if entry.failed {
-			builder.WriteString(fmt.Sprintf("  [err] %s -> %s\n", entry.expression, entry.output))
+			fmt.Fprintf(&builder, "  [err] %s -> %s\n", entry.expression, entry.output)
 			continue
 		}
-		builder.WriteString(fmt.Sprintf("  [ok]  %s\n", entry.output))
+		fmt.Fprintf(&builder, "  [ok]  %s\n", entry.output)
 	}
 
 	view := tea.NewView(builder.String())
@@ -368,7 +368,7 @@ func (m model) renderCompletion() string {
 		if i == m.completionIndex {
 			prefix = "> "
 		}
-		builder.WriteString(fmt.Sprintf("%s[%-3s] %-25s (%s)\n", prefix, item.Syntax, item.Name, item.Category))
+		fmt.Fprintf(&builder, "%s[%-3s] %-25s (%s)\n", prefix, item.Syntax, item.Name, item.Category)
 	}
 
 	selected := m.completionItems[m.completionIndex]
@@ -392,7 +392,6 @@ func padTo(s string, width int) string {
 	}
 	return s + strings.Repeat(" ", width-len(runes))
 }
-
 
 func (m model) renderInput() string {
 	var builder strings.Builder

@@ -247,17 +247,16 @@ func (s *Scanner) scanExplosions() (tok Token, lit string) {
 	tok = tEXPLODE
 
 	ch := s.read()
-	if ch == eof {
+	switch ch {
+	case eof:
 		return tok, buf.String()
-	}
-
-	if ch == '!' {
+	case '!':
 		tok = tCOMPOUND
 		_, _ = buf.WriteRune(ch)
-	} else if ch == 'p' {
+	case 'p':
 		tok = tPENETRATE
 		_, _ = buf.WriteRune(ch)
-	} else {
+	default:
 		s.unread()
 	}
 
