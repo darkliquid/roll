@@ -6,6 +6,7 @@ golangci-lint = "2.14.0"
 [tasks.build-wasm]
 description = "Build WebAssembly binary and copy wasm_exec.js for GitHub Pages"
 run = """
+#!/usr/bin/env bash
 set -euo pipefail
 mkdir -p docs
 GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o docs/roll.wasm ./cmd/wasm
@@ -24,6 +25,7 @@ echo "Successfully built docs/roll.wasm and synced docs/wasm_exec.js"
 [tasks.build]
 description = "Compile every package, including the js/wasm target"
 run = """
+#!/usr/bin/env bash
 set -euo pipefail
 go build ./...
 GOOS=js GOARCH=wasm go build -o /dev/null ./cmd/wasm
