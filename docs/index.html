@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Roll dice using the Roll20 dice notation, entirely in your browser.">
+<title>Roll · Dice Engine</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f8f9fa;
+    --border: #dadce0;
+    --border-focus: #c5221f;
+    --text: #202124;
+    --text-muted: #5f6368;
+    --d20-red: #c5221f;
+    --d20-red-hover: #a31b18;
+    --d20-badge-bg: #c5221f;
+    --d20-badge-text: #ffffff;
+    --btn-bg: #f8f9fa;
+    --btn-border: #f8f9fa;
+    --btn-text: #3c4043;
+    --btn-hover-bg: #f1f3f4;
+    --btn-hover-border: #dadce0;
+    --chip-bg: #f1f3f4;
+    --chip-text: #202124;
+    --modal-backdrop: rgba(32, 33, 36, 0.6);
+    --shadow: 0 1px 6px rgba(32, 33, 36, 0.28);
+    --shadow-soft: 0 1px 2px rgba(32, 33, 36, 0.1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121214;
+      --surface: #1e1f20;
+      --border: #3c4043;
+      --border-focus: #e04845;
+      --text: #e8eaed;
+      --text-muted: #9aa0a6;
+      --d20-red: #e04845;
+      --d20-red-hover: #f2615e;
+      --d20-badge-bg: #c5221f;
+      --d20-badge-text: #ffffff;
+      --btn-bg: #282a2d;
+      --btn-border: #282a2d;
+      --btn-text: #e8eaed;
+      --btn-hover-bg: #35373b;
+      --btn-hover-border: #5f6368;
+      --chip-bg: #282a2d;
+      --chip-text: #e8eaed;
+      --modal-backdrop: rgba(0, 0, 0, 0.75);
+      --shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+      --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: inherit; }
+
+  .topbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+  }
+
+  .topbar a,
+  .topbar button {
+    font-size: 0.85rem;
+    color: var(--text);
+    text-decoration: none;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .topbar a:hover,
+  .topbar button:hover {
+    background: var(--btn-hover-bg);
+    border-color: var(--btn-hover-border);
+  }
+
+  .topbar svg { width: 18px; height: 18px; fill: currentColor; }
+
+  main {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2.5rem 1.25rem 3rem;
+    gap: 1.75rem;
+  }
+
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.9rem;
+    margin-top: 1rem;
+  }
+
+  .logo-die { width: 92px; height: 92px; filter: drop-shadow(0 2px 6px rgba(197, 34, 31, 0.35)); }
+
+  .die-outer { fill: var(--d20-red); }
+  .die-inner { fill: var(--d20-red-hover); }
+  .die-edge { stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.5; }
+  .die-numeral {
+    fill: #ffffff;
+    font-family: inherit;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .wordmark {
+    font-size: 3rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  .wordmark .o { color: var(--d20-red); }
+
+  .search {
+    width: min(620px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+  }
+
+  .search-field {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 1.15rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    box-shadow: var(--shadow-soft);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .search-field:focus-within {
+    border-color: var(--border-focus);
+    box-shadow: var(--shadow);
+  }
+
+  .search-field svg { width: 20px; height: 20px; fill: var(--text-muted); flex: none; }
+
+  .search-field input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 1rem;
+    font-family: inherit;
+    min-width: 0;
+  }
+
+  .search-field input::placeholder { color: var(--text-muted); }
+
+  .actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: inherit;
+    font-size: 0.9rem;
+    color: var(--btn-text);
+    background: var(--btn-bg);
+    border: 1px solid var(--btn-border);
+    border-radius: 6px;
+    padding: 0.55rem 1.1rem;
+    cursor: pointer;
+    box-shadow: var(--shadow-soft);
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .btn:hover:not(:disabled) {
+    background: var(--btn-hover-bg);
+    border-color: var(--btn-hover-border);
+  }
+
+  .btn--primary {
+    background: var(--d20-red);
+    border-color: var(--d20-red);
+    color: #ffffff;
+  }
+
+  .btn--primary:hover:not(:disabled) {
+    background: var(--d20-red-hover);
+    border-color: var(--d20-red-hover);
+  }
+
+  .btn:disabled { opacity: 0.5; cursor: default; }
+
+  .status {
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    min-height: 1.2em;
+  }
+
+  .results {
+    width: min(620px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .result-card {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .total-badge {
+    flex: none;
+    min-width: 76px;
+    height: 76px;
+    padding: 0 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: var(--d20-badge-bg);
+    color: var(--d20-badge-text);
+    font-size: 2.1rem;
+    font-weight: 700;
+  }
+
+  .result-meta { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+
+  .formula {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 1.05rem;
+    word-break: break-word;
+  }
+
+  .metric { font-size: 0.85rem; color: var(--text-muted); }
+
+  .dice-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+  .die-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.4rem;
+    height: 2.4rem;
+    padding: 0 0.5rem;
+    border-radius: 8px;
+    background: var(--chip-bg);
+    color: var(--chip-text);
+    border: 1px solid var(--border);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+
+  .error {
+    width: min(620px, 100%);
+    padding: 0.9rem 1.1rem;
+    border-radius: 10px;
+    border: 1px solid var(--d20-red);
+    background: color-mix(in srgb, var(--d20-red) 12%, var(--bg));
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+
+  [hidden] { display: none !important; }
+
+  footer {
+    flex: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+  }
+
+  footer a {
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    text-decoration: none;
+  }
+
+  footer a:hover { color: var(--d20-red); text-decoration: underline; }
+  footer svg { width: 15px; height: 15px; fill: currentColor; }
+
+  dialog#help-modal {
+    width: min(680px, calc(100vw - 2rem));
+    max-height: calc(100vh - 3rem);
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg);
+    color: var(--text);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  dialog#help-modal::backdrop { background: var(--modal-backdrop); }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .modal-header h2 { margin: 0; font-size: 1.1rem; }
+
+  .icon-btn {
+    font-size: 1.4rem;
+    line-height: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.2rem 0.45rem;
+    border-radius: 6px;
+  }
+
+  .icon-btn:hover { background: var(--btn-hover-bg); color: var(--text); }
+
+  .modal-body { padding: 1.25rem; overflow-y: auto; max-height: calc(100vh - 9rem); }
+
+  .modal-body section { margin-bottom: 1.5rem; }
+  .modal-body section:last-child { margin-bottom: 0; }
+
+  .modal-body h3 {
+    margin: 0 0 0.35rem;
+    font-size: 0.95rem;
+    color: var(--d20-red);
+  }
+
+  .modal-body p { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--text-muted); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+
+  .chip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--chip-bg);
+    color: var(--chip-text);
+    cursor: pointer;
+  }
+
+  .chip:hover {
+    background: var(--d20-red);
+    border-color: var(--d20-red);
+    color: #ffffff;
+  }
+</style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Primary">
+    <button type="button" id="help-open">Grammar &amp; Help</button>
+    <a href="https://github.com/darkliquid/roll" rel="noopener" aria-label="GitHub repository">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      GitHub
+    </a>
+  </nav>
+
+  <main>
+    <div class="hero">
+      <svg class="logo-die" viewBox="0 0 120 120" role="img" aria-label="A twenty-sided die">
+        <polygon class="die-outer" points="60,4 107,31 107,89 60,116 13,89 13,31"/>
+        <polygon class="die-inner" points="60,30 88,76 32,76"/>
+        <g class="die-edge" fill="none">
+          <line x1="60" y1="4" x2="60" y2="30"/>
+          <line x1="13" y1="31" x2="32" y2="76"/>
+          <line x1="107" y1="31" x2="88" y2="76"/>
+          <line x1="13" y1="89" x2="32" y2="76"/>
+          <line x1="107" y1="89" x2="88" y2="76"/>
+          <line x1="60" y1="116" x2="60" y2="76"/>
+        </g>
+        <text class="die-numeral" x="60" y="68" text-anchor="middle">20</text>
+      </svg>
+      <div class="wordmark">R<span class="o">o</span>ll</div>
+    </div>
+
+    <form class="search" id="roll-form" autocomplete="off">
+      <label class="search-field" for="expression">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14Z"/></svg>
+        <input type="text" id="expression" name="expression" placeholder="e.g. 4d6kh3, 1d20+5, 3d6!" disabled>
+      </label>
+      <div class="actions">
+        <button class="btn btn--primary" type="submit" id="roll-btn" disabled>Roll</button>
+        <button class="btn" type="button" id="lucky-btn" disabled>I'm feeling lucky</button>
+      </div>
+    </form>
+
+    <p class="status" id="status" role="status">Loading dice engine…</p>
+
+    <section class="results" aria-live="polite">
+      <div class="result-card" id="result" hidden>
+        <div class="total-badge" id="total-value">0</div>
+        <div class="result-meta">
+          <div class="formula" id="formula"></div>
+          <div class="metric" id="metric" hidden></div>
+        </div>
+      </div>
+      <div class="dice-chips" id="dice-chips"></div>
+      <div class="error" id="error" role="alert" hidden></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Roll Dice Engine</span>
+    <span aria-hidden="true">·</span>
+    <a href="https://github.com/darkliquid/roll" rel="noopener">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      Source
+    </a>
+  </footer>
+
+  <dialog id="help-modal" aria-labelledby="help-title">
+    <div class="modal-header">
+      <h2 id="help-title">Grammar &amp; Help</h2>
+      <button type="button" class="icon-btn" id="help-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <section>
+        <h3>Basic Dice</h3>
+        <p>Roll <code>N</code> dice with <code>X</code> sides. Percentile and Fate dice have their own notation.</p>
+        <div class="chips">
+          <button type="button" class="chip" data-expr="4d6">4d6</button>
+          <button type="button" class="chip" data-expr="1d20+5">1d20+5</button>
+          <button type="button" class="chip" data-expr="1d%">1d%</button>
+          <button type="button" class="chip" data-expr="4dF">4dF</button>
+        </div>
+      </section>
+      <section>
+        <h3>Exploding</h3>
+        <p>Add extra dice on a maximum roll. Compound sums them into one die; penetrating subtracts one from each extra die.</p>
+        <div class="chips">
+          <button type="button" class="chip" data-expr="3d6!">3d6!</button>
+          <button type="button" class="chip" data-expr="4d6!!">4d6!!</button>
+          <button type="button" class="chip" data-expr="2d8!p+2">2d8!p+2</button>
+        </div>
+      </section>
+      <section>
+        <h3>Keep &amp; Drop</h3>
+        <p>Keep or drop the highest or lowest <code>N</code> dice.</p>
+        <div class="chips">
+          <button type="button" class="chip" data-expr="4d6kh3">4d6kh3</button>
+          <button type="button" class="chip" data-expr="4d6kl1">4d6kl1</button>
+          <button type="button" class="chip" data-expr="4d6dh1">4d6dh1</button>
+          <button type="button" class="chip" data-expr="4d6dl1">4d6dl1</button>
+        </div>
+      </section>
+      <section>
+        <h3>Rerolls</h3>
+        <p>Reroll dice that match a condition, either indefinitely or once.</p>
+        <div class="chips">
+          <button type="button" class="chip" data-expr="4d6r1">4d6r1</button>
+          <button type="button" class="chip" data-expr="4d6ro1">4d6ro1</button>
+        </div>
+      </section>
+      <section>
+        <h3>Targets &amp; Failures</h3>
+        <p>Count successes above, below, or equal to a target. <code>f</code> subtracts failures.</p>
+        <div class="chips">
+          <button type="button" class="chip" data-expr="5d10&gt;7">5d10&gt;7</button>
+          <button type="button" class="chip" data-expr="4d6&lt;3">4d6&lt;3</button>
+          <button type="button" class="chip" data-expr="4d6=6">4d6=6</button>
+          <button type="button" class="chip" data-expr="6d6&gt;4f1">6d6&gt;4f1</button>
+        </div>
+      </section>
+      <section>
+        <h3>Sorting</h3>
+        <p>Sort the rolled dice ascending (<code>s</code>) or descending (<code>sd</code>).</p>
+        <div class="chips">
+          <button type="button" class="chip" data-expr="6d6s">6d6s</button>
+          <button type="button" class="chip" data-expr="6d6sd">6d6sd</button>
+        </div>
+      </section>
+      <section>
+        <h3>Grouping</h3>
+        <p>Group expressions with <code>{ }</code>; separate pooled rolls with commas or add them with <code>+</code>.</p>
+        <div class="chips">
+          <button type="button" class="chip" data-expr="{4d6, 2d8}">{4d6, 2d8}</button>
+          <button type="button" class="chip" data-expr="{4d6, 2d8}&gt;4">{4d6, 2d8}&gt;4</button>
+        </div>
+      </section>
+    </div>
+  </dialog>
+
+  <script src="wasm_exec.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      var LUCKY_POOL = [
+        "4d6kh3",
+        "1d20+7",
+        "2d20kl1",
+        "3d6!",
+        "4d6!!",
+        "2d8!p+2",
+        "4dF+1",
+        "1d%",
+        "5d10>7",
+        "6d6>4f1",
+        "4d6ro1",
+        "6d6sd",
+        "{4d6, 2d8}>4",
+        "8d6"
+      ];
+
+      var form = document.getElementById("roll-form");
+      var input = document.getElementById("expression");
+      var rollBtn = document.getElementById("roll-btn");
+      var luckyBtn = document.getElementById("lucky-btn");
+      var status = document.getElementById("status");
+      var resultCard = document.getElementById("result");
+      var totalValue = document.getElementById("total-value");
+      var formula = document.getElementById("formula");
+      var metric = document.getElementById("metric");
+      var chips = document.getElementById("dice-chips");
+      var errorBox = document.getElementById("error");
+
+      var helpModal = document.getElementById("help-modal");
+      var helpOpen = document.getElementById("help-open");
+      var helpClose = document.getElementById("help-close");
+
+      function setStatus(message) {
+        status.textContent = message;
+        status.hidden = message === "";
+      }
+
+      function showError(message) {
+        resultCard.hidden = true;
+        chips.textContent = "";
+        errorBox.textContent = message;
+        errorBox.hidden = false;
+      }
+
+      function showResult(resp) {
+        errorBox.hidden = true;
+        resultCard.hidden = false;
+        totalValue.textContent = String(resp.total);
+        formula.textContent = resp.rendered || resp.input || "";
+        metric.hidden = !resp.hasSuccesses;
+        if (resp.hasSuccesses) {
+          metric.textContent = "Successes: " + resp.successes;
+        }
+        chips.textContent = "";
+        (resp.results || []).forEach(function (die) {
+          var chip = document.createElement("span");
+          chip.className = "die-chip";
+          chip.textContent = die.symbol;
+          chips.appendChild(chip);
+        });
+      }
+
+      function roll(expression) {
+        expression = (expression || "").trim();
+        if (expression === "") {
+          return;
+        }
+        input.value = expression;
+        if (typeof window.rollDice !== "function") {
+          showError("The dice engine is still loading. Please try again in a moment.");
+          return;
+        }
+        var resp;
+        try {
+          resp = window.rollDice(expression);
+        } catch (err) {
+          showError("Failed to roll: " + err.message);
+          return;
+        }
+        if (resp && resp.ok) {
+          showResult(resp);
+        } else {
+          showError((resp && resp.error) || "Unknown error");
+        }
+      }
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        roll(input.value);
+      });
+
+      luckyBtn.addEventListener("click", function () {
+        var expression = LUCKY_POOL[Math.floor(Math.random() * LUCKY_POOL.length)];
+        roll(expression);
+      });
+
+      helpOpen.addEventListener("click", function () {
+        if (typeof helpModal.showModal === "function") {
+          helpModal.showModal();
+        } else {
+          helpModal.setAttribute("open", "");
+        }
+      });
+
+      helpClose.addEventListener("click", function () {
+        helpModal.close();
+      });
+
+      helpModal.addEventListener("click", function (event) {
+        if (event.target === helpModal) {
+          helpModal.close();
+        }
+      });
+
+      helpModal.addEventListener("click", function (event) {
+        var chip = event.target.closest(".chip[data-expr]");
+        if (!chip) {
+          return;
+        }
+        var expression = chip.getAttribute("data-expr");
+        if (helpModal.open) {
+          helpModal.close();
+        }
+        roll(expression);
+      });
+
+      function waitForEngine() {
+        return new Promise(function (resolve, reject) {
+          var attempts = 0;
+          (function check() {
+            if (typeof window.rollDice === "function") {
+              resolve();
+              return;
+            }
+            if (attempts++ > 500) {
+              reject(new Error("the dice engine did not initialise"));
+              return;
+            }
+            setTimeout(check, 20);
+          })();
+        });
+      }
+
+      function instantiateFromBuffer(go) {
+        return fetch("roll.wasm")
+          .then(function (response) {
+            if (!response.ok) {
+              throw new Error("roll.wasm returned HTTP " + response.status);
+            }
+            return response.arrayBuffer();
+          })
+          .then(function (bytes) {
+            return WebAssembly.instantiate(bytes, go.importObject);
+          })
+          .then(function (result) {
+            return result.instance;
+          });
+      }
+
+      function loadEngine() {
+        if (typeof Go === "undefined") {
+          setStatus("");
+          showError("Failed to load wasm_exec.js.");
+          return;
+        }
+        var go = new Go();
+        var instancePromise;
+        if (typeof WebAssembly.instantiateStreaming === "function") {
+          instancePromise = WebAssembly.instantiateStreaming(fetch("roll.wasm"), go.importObject)
+            .then(function (result) { return result.instance; })
+            .catch(function () { return instantiateFromBuffer(go); });
+        } else {
+          instancePromise = instantiateFromBuffer(go);
+        }
+        instancePromise
+          .then(function (instance) {
+            go.run(instance);
+            return waitForEngine();
+          })
+          .then(function () {
+            setStatus("");
+            input.disabled = false;
+            rollBtn.disabled = false;
+            luckyBtn.disabled = false;
+            input.focus();
+          })
+          .catch(function (err) {
+            setStatus("");
+            showError("Failed to load the dice engine: " + err.message);
+          });
+      }
+
+      loadEngine();
+    })();
+  </script>
+</body>
+</html>
