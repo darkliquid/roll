@@ -1,5 +1,7 @@
 [tools]
 go = "1.27.1"
+golangci-lint = "2.14.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.8.0"
 
 [tasks.build-wasm]
 description = "Build WebAssembly binary and copy wasm_exec.js for GitHub Pages"
@@ -18,3 +20,31 @@ else
 fi
 echo "Successfully built docs/roll.wasm and synced docs/wasm_exec.js"
 """
+
+[tasks.build]
+description = "Compile every package, including the js/wasm target"
+run = """
+set -euo pipefail
+go build ./...
+GOOS=js GOARCH=wasm go build -o /dev/null ./cmd/wasm
+"""
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run"
+
+[tasks.vulncheck]
+description = "Scan the module for known vulnerabilities"
+run = "govulncheck ./..."
+
+[tasks.test]
+description = "Run the test suite"
+run = "go test ./..."
+
+[tasks.ci]
+description = "Run every CI check (build, vet, lint, vulncheck, test)"
+depends = ["build", "vet", "lint", "vulncheck", "test"]
