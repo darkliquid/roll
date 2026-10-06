@@ -61,9 +61,11 @@ the tree green (`go test ./...`, `go vet ./...`, `golangci-lint run`).
 
 ## Task 10 - Dynamic die size
 
-- [x] Parse a bare `d(expr)` as a constant side expression; reject non-constant,
-      fractional and unsafe results.
-- [x] Tests: `3d(floor(6/2))`, `2d(2+2)`, `1d(ceil(5/2))`, `9d(floor(3/2))`, `9d(3/2)`, `9d(1d6)`.
+- [x] Parse a bare `d(expr)`; fold constant expressions, otherwise evaluate at roll time.
+- [x] Reject fractional and unsafe results (compile time when constant, roll time otherwise).
+- [x] Serialize the nested side program (binary version `0x04`).
+- [x] Tests: `3d(floor(6/2))`, `2d(2+2)`, `9d(1d6)`, `3d(2d6kh1)`, `3d(4d(d8)kh3+2)`,
+      and the runtime fractional/unsafe errors.
 
 ## Task 11 - Tooling and docs
 

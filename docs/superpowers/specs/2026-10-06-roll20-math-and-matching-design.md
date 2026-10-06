@@ -120,14 +120,19 @@ effect on the result. Because matching is stored on `DiceTerm`, the binary forma
 ## 5a. Dynamic die size
 
 A bare `d` followed by a parenthesised expression takes its number of sides from that
-expression, e.g. `3d(floor(6/2))` rolls `3d3`:
+expression, e.g. `3d(floor(6/2))` rolls `3d3`. The expression may itself roll dice, in
+which case it is evaluated once at roll time (sharing the roll context, so limits and
+the depth budget apply) and its total becomes the face count:
+`3d(4d(d8)kh3+2)` rolls a `d8`, uses the result as the faces of `4d(...)`, keeps the
+highest three, adds two, and rolls that many faces.
 
-- The side expression must be constant (no dice); a dice term yields
-  `ErrNonConstantDieSize`.
-- A non-integer result yields `ErrInvalidDieSize`.
+- A constant expression is folded at compile time and normalises to its literal form
+  (`3d3`); a non-constant one stays as `Nd(<expr>)` and carries a nested program.
+- A non-integer result yields `ErrInvalidDieSize`, at compile time when constant and at
+  roll time otherwise.
 - A result below two sides is rejected by the existing unsafe-die check.
 
-The die is resolved at compile time, so it normalises to its literal form (`3d3`).
+The nested program is serialized inside the die term (binary version `0x04`).
 
 ---
 

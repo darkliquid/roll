@@ -540,7 +540,7 @@
       </section>
       <section>
         <h3>Math</h3>
-        <p>Multiply, divide, take a remainder, or raise to a power. The functions <code>floor</code>, <code>round</code>, <code>ceil</code> and <code>abs</code> act on a value, and a die can take a computed number of sides.</p>
+        <p>Multiply, divide, take a remainder, or raise to a power. The functions <code>floor</code>, <code>round</code>, <code>ceil</code> and <code>abs</code> act on a value. A die can take a computed number of sides, even from another roll: <code>3d(floor(6/2))</code> rolls 3d3, while <code>3d(4d(d8)kh3+2)</code> resolves its faces from a nested roll.</p>
         <div class="chips">
           <button type="button" class="chip" data-expr="2d6*3">2d6*3</button>
           <button type="button" class="chip" data-expr="2d6/2">2d6/2</button>
@@ -551,6 +551,7 @@
           <button type="button" class="chip" data-expr="ceil(11/2)">ceil(11/2)</button>
           <button type="button" class="chip" data-expr="abs(-3)">abs(-3)</button>
           <button type="button" class="chip" data-expr="3d(floor(6/2))">3d(floor(6/2))</button>
+          <button type="button" class="chip" data-expr="3d(4d(d8)kh3+2)">3d(4d(d8)kh3+2)</button>
         </div>
       </section>
       <section>
