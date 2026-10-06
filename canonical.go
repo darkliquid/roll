@@ -98,6 +98,16 @@ func canonicalizeProgram(p *Program) string {
 			op := BinaryOpType(inst.Arg)
 			rendered := canonicalizeBinary(op, a, b)
 			stack = append(stack, stackNode{rendered: rendered, sortKey: rendered, prec: binaryPrecedence(op)})
+
+		case OpFunc:
+			if len(stack) < 1 {
+				return p.Rendered
+			}
+			a := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+
+			rendered := FuncType(inst.Arg).String() + "(" + strings.TrimPrefix(a.rendered, "+") + ")"
+			stack = append(stack, stackNode{rendered: rendered, sortKey: rendered, prec: atomicPrecedence})
 		}
 	}
 

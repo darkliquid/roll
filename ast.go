@@ -20,6 +20,8 @@ const (
 	OpPushNumber
 	// OpBinary applies an arithmetic operator to the top two VM stack values.
 	OpBinary
+	// OpFunc applies a math function to the top VM stack value.
+	OpFunc
 )
 
 func (op Opcode) String() string {
@@ -32,8 +34,40 @@ func (op Opcode) String() string {
 		return "push_number"
 	case OpBinary:
 		return "binary"
+	case OpFunc:
+		return "func"
 	default:
 		return "unknown"
+	}
+}
+
+// FuncType identifies a math function.
+type FuncType int
+
+const (
+	// FuncFloor rounds toward negative infinity.
+	FuncFloor FuncType = iota
+	// FuncRound rounds toward zero below a half and toward positive infinity at or above it.
+	FuncRound
+	// FuncCeil rounds toward positive infinity.
+	FuncCeil
+	// FuncAbs returns the absolute value.
+	FuncAbs
+)
+
+// String returns the notation for the math function.
+func (f FuncType) String() string {
+	switch f {
+	case FuncFloor:
+		return "floor"
+	case FuncRound:
+		return "round"
+	case FuncCeil:
+		return "ceil"
+	case FuncAbs:
+		return "abs"
+	default:
+		return "?"
 	}
 }
 
@@ -481,6 +515,27 @@ func EvaluateProgramWithLimits(program *Program, limits Limits) (Result, error) 
 				Num:   value,
 				IsNum: true,
 			})
+		case OpFunc:
+			if len(stack) < 1 {
+				return Result{}, fmt.Errorf("function %d requires a value on the stack", instruction.Arg)
+			}
+			a := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+
+			value, err := applyFunc(FuncType(instruction.Arg), a.numeric())
+			if err != nil {
+				return Result{}, err
+			}
+
+			stack = append(stack, vmValue{
+				Result: Result{
+					Total:     int(value),
+					Results:   a.Result.Results,
+					Successes: a.Result.Successes,
+				},
+				Num:   value,
+				IsNum: true,
+			})
 		default:
 			return Result{}, fmt.Errorf("unsupported opcode %d", instruction.Op)
 		}
@@ -516,6 +571,22 @@ func applyBinary(op BinaryOpType, a, b float64) (float64, error) {
 		return math.Pow(a, b), nil
 	default:
 		return 0, fmt.Errorf("unsupported binary operator %d", op)
+	}
+}
+
+// applyFunc performs a math function on a single value.
+func applyFunc(fn FuncType, x float64) (float64, error) {
+	switch fn {
+	case FuncFloor:
+		return math.Floor(x), nil
+	case FuncRound:
+		return math.Floor(x + 0.5), nil
+	case FuncCeil:
+		return math.Ceil(x), nil
+	case FuncAbs:
+		return math.Abs(x), nil
+	default:
+		return 0, fmt.Errorf("unsupported function %d", fn)
 	}
 }
 

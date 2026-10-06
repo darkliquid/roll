@@ -16,6 +16,7 @@ func TestBinaryMarshalUnmarshal(t *testing.T) {
 		"2d6!",
 		"2d6*3+4",
 		"(2d6+3)*4",
+		"floor(11/2)+1d6",
 	}
 
 	for _, expr := range expressions {
@@ -104,6 +105,7 @@ func TestCanonicalize(t *testing.T) {
 		{input: "2d6*3+4", want: "2d6*3+4"},
 		{input: "(2d6+3)*4", want: "(2d6+3)*4"},
 		{input: "2d6+4*3", want: "3*4+2d6"},
+		{input: "floor(11/2)", want: "floor(11/2)"},
 	}
 
 	for _, tt := range tests {

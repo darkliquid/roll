@@ -202,12 +202,15 @@ func (n *binaryNode) emit(program *Program) {
 }
 
 func (n *binaryNode) render() string {
+	left := strings.TrimPrefix(n.left.render(), "+")
+	right := strings.TrimPrefix(n.right.render(), "+")
+
 	if n.op == BinarySub {
 		if l, ok := n.left.(*numberNode); ok && l.value == 0 {
-			return "-" + n.right.render()
+			return "-" + right
 		}
 	}
-	return n.left.render() + n.op.String() + n.right.render()
+	return left + n.op.String() + right
 }
 
 func (n *binaryNode) maxDepth() int {
@@ -228,6 +231,24 @@ func (n *parenNode) render() string {
 
 func (n *parenNode) maxDepth() int {
 	return n.child.maxDepth()
+}
+
+type funcNode struct {
+	fn    FuncType
+	child compiledNode
+}
+
+func (n *funcNode) emit(program *Program) {
+	n.child.emit(program)
+	program.Code = append(program.Code, Instruction{Op: OpFunc, Arg: int(n.fn)})
+}
+
+func (n *funcNode) render() string {
+	return n.fn.String() + "(" + strings.TrimPrefix(n.child.render(), "+") + ")"
+}
+
+func (n *funcNode) maxDepth() int {
+	return n.child.maxDepth() + 1
 }
 
 func renderDiceTerm(term DiceTerm) string {
@@ -401,6 +422,24 @@ func (p *Parser) parsePrimary(tok Token, lit string, grouped bool) (compiledNode
 		return &numberNode{value: value}, nil
 	case tDIE:
 		return p.parseDiceTerm("", lit)
+	case tFUNC:
+		fn, err := parseFuncName(lit)
+		if err != nil {
+			return nil, err
+		}
+		t, l := p.scanIgnoreWhitespace()
+		if t != tLPAREN {
+			return nil, ErrUnexpectedToken(l)
+		}
+		child, err := p.parseExpression(grouped, false)
+		if err != nil {
+			return nil, err
+		}
+		t, l = p.scanIgnoreWhitespace()
+		if t != tRPAREN {
+			return nil, ErrUnexpectedToken(l)
+		}
+		return &funcNode{fn: fn, child: child}, nil
 	case tGROUPSTART:
 		node, err := p.parseGroupedRoll(grouped)
 		if e, ok := err.(ErrEndOfRoll); ok && e == "" {
@@ -419,6 +458,21 @@ func (p *Parser) parsePrimary(tok Token, lit string, grouped bool) (compiledNode
 		return &parenNode{child: child}, nil
 	default:
 		return nil, ErrUnexpectedToken(lit)
+	}
+}
+
+func parseFuncName(name string) (FuncType, error) {
+	switch name {
+	case "floor":
+		return FuncFloor, nil
+	case "round":
+		return FuncRound, nil
+	case "ceil":
+		return FuncCeil, nil
+	case "abs":
+		return FuncAbs, nil
+	default:
+		return 0, ErrUnexpectedToken(name)
 	}
 }
 

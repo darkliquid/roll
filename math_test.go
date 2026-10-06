@@ -25,6 +25,16 @@ func TestRoll20Spec_Division(t *testing.T) {
 	runRoll20TestCases(t, tests)
 }
 
+func TestRoll20Spec_Floor(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "floor of division floor(11/2)", seed: 0, input: "floor(11/2)", wantString: "floor(11/2)", wantRolls: []int{}, wantTotal: 5},
+		{name: "floor towards negative infinity floor(-3/2)", seed: 0, input: "floor(-3/2)", wantString: "floor(-3/2)", wantRolls: []int{}, wantTotal: -2},
+		{name: "floor of dice division floor(2d6/2)", seed: 2, input: "floor(2d6/2)", wantString: "floor(2d6/2)", wantRolls: []int{5, 1}, wantTotal: 3},
+		{name: "floor added to dice floor(11/2)+1d6", seed: 0, input: "floor(11/2)+1d6", wantString: "floor(11/2)+d6", wantRolls: []int{1}, wantTotal: 6},
+	}
+	runRoll20TestCases(t, tests)
+}
+
 func TestRoll20Spec_Exponentiation(t *testing.T) {
 	tests := []roll20TestCase{
 		{name: "constant power 2**3", seed: 0, input: "2**3", wantString: "2**3", wantRolls: []int{}, wantTotal: 8},

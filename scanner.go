@@ -93,6 +93,13 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 		s.unread()
 		return s.scanDieOrDrop()
 	case ch == 'f':
+		if s.peekPrefix("loor") {
+			s.read()
+			s.read()
+			s.read()
+			s.read()
+			return tFUNC, "floor"
+		}
 		return tFAILURES, string(ch)
 	case ch == '!':
 		s.unread()
