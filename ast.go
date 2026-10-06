@@ -136,14 +136,17 @@ func (p *Program) String() string {
 type DiceTerm struct {
 	Multiplier int
 	Die        Die
-	Modifier   int
-	Exploding  *ExplodingOp
-	Limit      *LimitOp
-	Success    *ComparisonOp
-	Failure    *ComparisonOp
-	Rerolls    []RerollOp
-	Sort       SortType
-	Match      *MatchOp
+	// Sides, when set, is evaluated at roll time to determine the number of
+	// faces; Die is nil in that case.
+	Sides     *Program
+	Modifier  int
+	Exploding *ExplodingOp
+	Limit     *LimitOp
+	Success   *ComparisonOp
+	Failure   *ComparisonOp
+	Rerolls   []RerollOp
+	Sort      SortType
+	Match     *MatchOp
 }
 
 // GroupTerm captures the aggregation semantics of a grouped instruction.
@@ -492,33 +495,42 @@ func EvaluateProgramWithLimits(program *Program, limits Limits) (Result, error) 
 		return Result{}, nil
 	}
 
-	limits = limits.normalized()
-	if program.MaxDepth > limits.MaxEvalDepth {
-		return Result{}, ErrLimitExceeded(fmt.Sprintf("roll exceeded maximum evaluation depth of %d", limits.MaxEvalDepth))
+	ctx := &rollContext{limits: limits.normalized()}
+	value, err := runProgram(ctx, program)
+	if err != nil {
+		return Result{}, err
+	}
+	return value.Result, nil
+}
+
+// runProgram runs a compiled program against a shared roll context so that
+// nested side expressions observe the same limits.
+func runProgram(ctx *rollContext, program *Program) (vmValue, error) {
+	if program.MaxDepth > ctx.limits.MaxEvalDepth {
+		return vmValue{}, ErrLimitExceeded(fmt.Sprintf("roll exceeded maximum evaluation depth of %d", ctx.limits.MaxEvalDepth))
 	}
 
-	ctx := &rollContext{limits: limits}
 	stack := make([]vmValue, 0, len(program.Code))
 
 	for _, instruction := range program.Code {
 		switch instruction.Op {
 		case OpRollDice:
 			if instruction.Arg < 0 || instruction.Arg >= len(program.DiceTerms) {
-				return Result{}, fmt.Errorf("invalid dice term index %d", instruction.Arg)
+				return vmValue{}, fmt.Errorf("invalid dice term index %d", instruction.Arg)
 			}
 			term := program.DiceTerms[instruction.Arg]
 			result, err := evalDiceTerm(ctx, term)
 			if err != nil {
-				return Result{}, err
+				return vmValue{}, err
 			}
 			stack = append(stack, vmValue{Result: result, Modifier: term.Modifier})
 		case OpRollGroup:
 			if instruction.Arg < 0 || instruction.Arg >= len(program.GroupTerms) {
-				return Result{}, fmt.Errorf("invalid group term index %d", instruction.Arg)
+				return vmValue{}, fmt.Errorf("invalid group term index %d", instruction.Arg)
 			}
 			term := program.GroupTerms[instruction.Arg]
 			if term.ChildCount > len(stack) {
-				return Result{}, fmt.Errorf("group term %d requires %d child values, stack has %d", instruction.Arg, term.ChildCount, len(stack))
+				return vmValue{}, fmt.Errorf("group term %d requires %d child values, stack has %d", instruction.Arg, term.ChildCount, len(stack))
 			}
 			children := append([]vmValue(nil), stack[len(stack)-term.ChildCount:]...)
 			stack = stack[:len(stack)-term.ChildCount]
@@ -528,7 +540,7 @@ func EvaluateProgramWithLimits(program *Program, limits Limits) (Result, error) 
 			stack = append(stack, vmValue{Result: Result{Total: instruction.Arg}, Num: float64(instruction.Arg), IsNum: true})
 		case OpBinary:
 			if len(stack) < 2 {
-				return Result{}, fmt.Errorf("binary operator %d requires two values on the stack", instruction.Arg)
+				return vmValue{}, fmt.Errorf("binary operator %d requires two values on the stack", instruction.Arg)
 			}
 			b := stack[len(stack)-1]
 			a := stack[len(stack)-2]
@@ -536,7 +548,7 @@ func EvaluateProgramWithLimits(program *Program, limits Limits) (Result, error) 
 
 			value, err := applyBinary(BinaryOpType(instruction.Arg), a.numeric(), b.numeric())
 			if err != nil {
-				return Result{}, err
+				return vmValue{}, err
 			}
 
 			stack = append(stack, vmValue{
@@ -550,14 +562,14 @@ func EvaluateProgramWithLimits(program *Program, limits Limits) (Result, error) 
 			})
 		case OpFunc:
 			if len(stack) < 1 {
-				return Result{}, fmt.Errorf("function %d requires a value on the stack", instruction.Arg)
+				return vmValue{}, fmt.Errorf("function %d requires a value on the stack", instruction.Arg)
 			}
 			a := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
 
 			value, err := applyFunc(FuncType(instruction.Arg), a.numeric())
 			if err != nil {
-				return Result{}, err
+				return vmValue{}, err
 			}
 
 			stack = append(stack, vmValue{
@@ -570,15 +582,15 @@ func EvaluateProgramWithLimits(program *Program, limits Limits) (Result, error) 
 				IsNum: true,
 			})
 		default:
-			return Result{}, fmt.Errorf("unsupported opcode %d", instruction.Op)
+			return vmValue{}, fmt.Errorf("unsupported opcode %d", instruction.Op)
 		}
 	}
 
 	if len(stack) != 1 {
-		return Result{}, fmt.Errorf("program left %d results on the VM stack", len(stack))
+		return vmValue{}, fmt.Errorf("program left %d results on the VM stack", len(stack))
 	}
 
-	return stack[0].Result, nil
+	return stack[0], nil
 }
 
 // applyBinary performs an arithmetic operation, returning an error for unsafe divisors.
@@ -623,8 +635,32 @@ func applyFunc(fn FuncType, x float64) (float64, error) {
 	}
 }
 
+// resolveDie returns the concrete die for a term, evaluating a dynamic side
+// expression at roll time when present.
+func resolveDie(ctx *rollContext, term DiceTerm) (Die, error) {
+	if term.Sides == nil {
+		return term.Die, nil
+	}
+
+	value, err := runProgram(ctx, term.Sides)
+	if err != nil {
+		return nil, err
+	}
+
+	sides := value.numeric()
+	if sides != math.Trunc(sides) {
+		return nil, ErrInvalidDieSize(fmt.Sprintf("die size %v is not a whole number", sides))
+	}
+	return NormalDie(int(sides)), nil
+}
+
 func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
-	if err = validateDieLimits(term.Die, ctx.limits); err != nil {
+	die, err := resolveDie(ctx, term)
+	if err != nil {
+		return Result{}, err
+	}
+
+	if err = validateDieLimits(die, ctx.limits); err != nil {
 		return
 	}
 
@@ -647,7 +683,7 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 		if err = ctx.recordRoll(&dieRolls); err != nil {
 			return Result{}, err
 		}
-		result.Results = append(result.Results, term.Die.Roll())
+		result.Results = append(result.Results, die.Roll())
 	}
 
 	for i, roll := range result.Results {
@@ -657,7 +693,7 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 				if err = ctx.recordRoll(&dieRolls); err != nil {
 					return Result{}, err
 				}
-				roll = term.Die.Roll()
+				roll = die.Roll()
 				result.Results[i] = roll
 				if reroll.Once {
 					break RerollOnce
@@ -670,33 +706,33 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 		switch term.Exploding.Type {
 		case Exploding:
 			for _, roll := range result.Results {
-				for term.Exploding.Match(roll.Result, term.Die) {
+				for term.Exploding.Match(roll.Result, die) {
 					if err = ctx.recordRoll(&dieRolls); err != nil {
 						return Result{}, err
 					}
-					roll = term.Die.Roll()
+					roll = die.Roll()
 					result.Results = append(result.Results, roll)
 				}
 			}
 		case Compounded:
 			compound := 0
 			for _, roll := range result.Results {
-				for term.Exploding.Match(roll.Result, term.Die) {
+				for term.Exploding.Match(roll.Result, die) {
 					compound += roll.Result
 					if err = ctx.recordRoll(&dieRolls); err != nil {
 						return Result{}, err
 					}
-					roll = term.Die.Roll()
+					roll = die.Roll()
 				}
 			}
 			result.Results = append(result.Results, DieRoll{Result: compound, Symbol: strconv.Itoa(compound)})
 		case Penetrating:
 			for _, roll := range result.Results {
-				for term.Exploding.Match(roll.Result, term.Die) {
+				for term.Exploding.Match(roll.Result, die) {
 					if err = ctx.recordRoll(&dieRolls); err != nil {
 						return Result{}, err
 					}
-					roll = term.Die.Roll()
+					roll = die.Roll()
 					newRoll := roll
 					newRoll.Result--
 					newRoll.Symbol = strconv.Itoa(newRoll.Result)

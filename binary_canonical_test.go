@@ -19,6 +19,7 @@ func TestBinaryMarshalUnmarshal(t *testing.T) {
 		"floor(11/2)+1d6",
 		"4d6mt3>5",
 		"2d6m",
+		"3d(4d(d8)kh3+2)",
 	}
 
 	for _, expr := range expressions {
@@ -110,6 +111,8 @@ func TestCanonicalize(t *testing.T) {
 		{input: "floor(11/2)", want: "floor(11/2)"},
 		{input: "4d6mt3>5", want: "4d6mt3>5"},
 		{input: "2d6m", want: "2d6m"},
+		{input: "9d(1d6)", want: "9d(d6)"},
+		{input: "3d(4d(d8)kh3+2)", want: "3d(4d(d8)kh3+2)"},
 	}
 
 	for _, tt := range tests {

@@ -71,12 +71,18 @@ func (p *Parser) Parse() (program *Program, err error) {
 		return nil, ErrUnexpectedToken(lit)
 	}
 
-	program = &Program{
+	program = newProgram(root)
+	return program, nil
+}
+
+// newProgram compiles a node tree into a standalone program.
+func newProgram(root compiledNode) *Program {
+	program := &Program{
 		Rendered: strings.TrimPrefix(root.render(), "+"),
 		MaxDepth: root.maxDepth(),
 	}
 	root.emit(program)
-	return program, nil
+	return program
 }
 
 type compiledNode interface {
@@ -100,6 +106,9 @@ func (n *diceNode) render() string {
 }
 
 func (n *diceNode) maxDepth() int {
+	if n.term.Sides != nil {
+		return 1 + n.term.Sides.MaxDepth
+	}
 	return 1
 }
 
@@ -262,7 +271,11 @@ func renderDiceTerm(term DiceTerm) string {
 		output.WriteString("+")
 	}
 
-	output.WriteString(term.Die.String())
+	if term.Sides != nil {
+		output.WriteString("d(" + term.Sides.String() + ")")
+	} else {
+		output.WriteString(term.Die.String())
+	}
 
 	if term.Modifier != 0 {
 		fmt.Fprintf(&output, "%+d", term.Modifier)
@@ -493,11 +506,9 @@ func (p *Parser) parseDiceTerm(count, dieCode string) (compiledNode, error) {
 		node.term.Multiplier = multiplier
 	}
 
-	die, err := p.parseDieTerm(dieCode)
-	if err != nil {
+	if err := p.parseDieSpec(node, dieCode); err != nil {
 		return nil, err
 	}
-	node.term.Die = die
 
 	if err := p.parsePostfix(node); err != nil {
 		return nil, err
@@ -506,38 +517,50 @@ func (p *Parser) parseDiceTerm(count, dieCode string) (compiledNode, error) {
 	return node, nil
 }
 
-// parseDieTerm resolves a die. When no sides are given (a bare "d") the side
-// count may be a constant expression, e.g. 3d(floor(6/2)).
-func (p *Parser) parseDieTerm(dieCode string) (Die, error) {
+// parseDieSpec resolves the die for a term. A bare "d" takes its side count from
+// a parenthesised expression, folded at compile time when constant and otherwise
+// evaluated at roll time.
+func (p *Parser) parseDieSpec(node *diceNode, dieCode string) error {
 	if strings.TrimPrefix(strings.ToUpper(dieCode), "D") != "" {
-		return p.parseDie(dieCode)
+		die, err := p.parseDie(dieCode)
+		if err != nil {
+			return err
+		}
+		node.term.Die = die
+		return nil
 	}
 
 	tok, _ := p.scanIgnoreWhitespace()
 	if tok != tLPAREN {
-		return nil, ErrUnknownDie(dieCode)
+		return ErrUnknownDie(dieCode)
 	}
 
 	sideNode, err := p.parseExpression(false, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	tok, lit := p.scanIgnoreWhitespace()
 	if tok != tRPAREN {
-		return nil, ErrUnexpectedToken(lit)
+		return ErrUnexpectedToken(lit)
 	}
 
 	sides, err := evalConstDieSize(sideNode)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		die := NormalDie(sides)
+		if err := validateDieLimits(die, p.limits); err != nil {
+			return err
+		}
+		node.term.Die = die
+		return nil
 	}
 
-	die := NormalDie(sides)
-	if err := validateDieLimits(die, p.limits); err != nil {
-		return nil, err
+	if _, ok := err.(ErrNonConstantDieSize); !ok {
+		return err
 	}
-	return die, nil
+
+	node.term.Sides = newProgram(sideNode)
+	return nil
 }
 
 // evalConstDieSize folds a constant expression into a whole number of die sides.

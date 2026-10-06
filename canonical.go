@@ -120,6 +120,9 @@ func canonicalizeProgram(p *Program) string {
 
 func diceSortKey(term DiceTerm, rendered string) string {
 	cleanRendered := strings.TrimPrefix(strings.TrimPrefix(rendered, "+"), "-")
+	if term.Sides != nil {
+		return fmt.Sprintf("d(%s):%s", term.Sides.Canonical(), cleanRendered)
+	}
 	switch d := term.Die.(type) {
 	case NormalDie:
 		return fmt.Sprintf("d%09d:%s", d, cleanRendered)
@@ -145,7 +148,11 @@ func canonicalizeDiceTerm(term DiceTerm) string {
 	}
 
 	// Die representation (canonical lowercase/uppercase symbols, omit count 1)
-	output.WriteString(canonicalDieString(term.Die))
+	if term.Sides != nil {
+		output.WriteString("d(" + term.Sides.Canonical() + ")")
+	} else {
+		output.WriteString(canonicalDieString(term.Die))
+	}
 
 	// Term modifier
 	if term.Modifier != 0 {
