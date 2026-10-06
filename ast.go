@@ -448,9 +448,12 @@ func (ctx *rollContext) recordRoll(perDie *int) error {
 
 // Result is a collection of die rolls and a count of successes.
 type Result struct {
-	Results   []DieRoll
-	Total     int
-	Successes int
+	Results    []DieRoll
+	Total      int
+	Successes  int
+	Rerolls    int
+	Explosions int
+	Drops      int
 }
 
 // Len is the number of results.
@@ -793,6 +796,7 @@ func applyRerolls(ctx *rollContext, term DiceTerm, die Die, result *Result, dieR
 				}
 				roll = die.Roll()
 				result.Results[i] = roll
+				result.Rerolls++
 				if reroll.Once {
 					break RerollOnce
 				}
