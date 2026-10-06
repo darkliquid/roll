@@ -415,6 +415,16 @@ type ErrDivisionByZero string
 
 func (e ErrDivisionByZero) Error() string { return string(e) }
 
+// ErrInvalidDieSize is raised when a computed die size is not a whole number.
+type ErrInvalidDieSize string
+
+func (e ErrInvalidDieSize) Error() string { return string(e) }
+
+// ErrNonConstantDieSize is raised when a die size expression depends on rolled dice.
+type ErrNonConstantDieSize string
+
+func (e ErrNonConstantDieSize) Error() string { return string(e) }
+
 type rollContext struct {
 	limits     Limits
 	totalRolls int

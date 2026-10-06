@@ -3,6 +3,7 @@ package roll
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -492,7 +493,7 @@ func (p *Parser) parseDiceTerm(count, dieCode string) (compiledNode, error) {
 		node.term.Multiplier = multiplier
 	}
 
-	die, err := p.parseDie(dieCode)
+	die, err := p.parseDieTerm(dieCode)
 	if err != nil {
 		return nil, err
 	}
@@ -503,6 +504,80 @@ func (p *Parser) parseDiceTerm(count, dieCode string) (compiledNode, error) {
 	}
 
 	return node, nil
+}
+
+// parseDieTerm resolves a die. When no sides are given (a bare "d") the side
+// count may be a constant expression, e.g. 3d(floor(6/2)).
+func (p *Parser) parseDieTerm(dieCode string) (Die, error) {
+	if strings.TrimPrefix(strings.ToUpper(dieCode), "D") != "" {
+		return p.parseDie(dieCode)
+	}
+
+	tok, _ := p.scanIgnoreWhitespace()
+	if tok != tLPAREN {
+		return nil, ErrUnknownDie(dieCode)
+	}
+
+	sideNode, err := p.parseExpression(false, false)
+	if err != nil {
+		return nil, err
+	}
+
+	tok, lit := p.scanIgnoreWhitespace()
+	if tok != tRPAREN {
+		return nil, ErrUnexpectedToken(lit)
+	}
+
+	sides, err := evalConstDieSize(sideNode)
+	if err != nil {
+		return nil, err
+	}
+
+	die := NormalDie(sides)
+	if err := validateDieLimits(die, p.limits); err != nil {
+		return nil, err
+	}
+	return die, nil
+}
+
+// evalConstDieSize folds a constant expression into a whole number of die sides.
+func evalConstDieSize(node compiledNode) (int, error) {
+	value, err := evalConstExpr(node)
+	if err != nil {
+		return 0, err
+	}
+	if value != math.Trunc(value) {
+		return 0, ErrInvalidDieSize(fmt.Sprintf("die size %v is not a whole number", value))
+	}
+	return int(value), nil
+}
+
+// evalConstExpr evaluates a compiled node that must not depend on rolled dice.
+func evalConstExpr(node compiledNode) (float64, error) {
+	switch n := node.(type) {
+	case *numberNode:
+		return float64(n.value), nil
+	case *parenNode:
+		return evalConstExpr(n.child)
+	case *binaryNode:
+		left, err := evalConstExpr(n.left)
+		if err != nil {
+			return 0, err
+		}
+		right, err := evalConstExpr(n.right)
+		if err != nil {
+			return 0, err
+		}
+		return applyBinary(n.op, left, right)
+	case *funcNode:
+		arg, err := evalConstExpr(n.child)
+		if err != nil {
+			return 0, err
+		}
+		return applyFunc(n.fn, arg)
+	default:
+		return 0, ErrNonConstantDieSize("die size must be a constant expression")
+	}
 }
 
 // parsePostfix consumes the postfix modifiers that attach to a dice or group term.

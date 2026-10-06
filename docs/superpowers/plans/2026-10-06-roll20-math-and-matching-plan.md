@@ -58,3 +58,15 @@ the tree green (`go test ./...`, `go vet ./...`, `golangci-lint run`).
 
 - [x] Add REPL catalog entries for the new syntax.
 - [x] Rebuild `docs/roll.wasm`; run `mise run ci`.
+
+## Task 10 - Dynamic die size
+
+- [x] Parse a bare `d(expr)` as a constant side expression; reject non-constant,
+      fractional and unsafe results.
+- [x] Tests: `3d(floor(6/2))`, `2d(2+2)`, `1d(ceil(5/2))`, `9d(floor(3/2))`, `9d(3/2)`, `9d(1d6)`.
+
+## Task 11 - Tooling and docs
+
+- [x] Build the repl binary as part of `mise run build` (CI check).
+- [x] Document math operators, functions, matching and dynamic dice on the website.
+- [x] Add exhaustive tests for odd constructions (`4d%%2`, `2d%kh1`, ...).

@@ -117,6 +117,20 @@ effect on the result. Because matching is stored on `DiceTerm`, the binary forma
 
 ---
 
+## 5a. Dynamic die size
+
+A bare `d` followed by a parenthesised expression takes its number of sides from that
+expression, e.g. `3d(floor(6/2))` rolls `3d3`:
+
+- The side expression must be constant (no dice); a dice term yields
+  `ErrNonConstantDieSize`.
+- A non-integer result yields `ErrInvalidDieSize`.
+- A result below two sides is rejected by the existing unsafe-die check.
+
+The die is resolved at compile time, so it normalises to its literal form (`3d3`).
+
+---
+
 ## 6. Compatibility
 
 - Existing normalisation, canonical ordering and binary round-tripping are preserved for all
