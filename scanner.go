@@ -92,6 +92,14 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 	case ch == 'd':
 		s.unread()
 		return s.scanDieOrDrop()
+	case ch == 'c':
+		if s.peekPrefix("eil") {
+			s.read()
+			s.read()
+			s.read()
+			return tFUNC, "ceil"
+		}
+		return tILLEGAL, string(ch)
 	case ch == 'f':
 		if s.peekPrefix("loor") {
 			s.read()

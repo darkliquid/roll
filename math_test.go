@@ -25,6 +25,16 @@ func TestRoll20Spec_Division(t *testing.T) {
 	runRoll20TestCases(t, tests)
 }
 
+func TestRoll20Spec_Ceil(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "ceil rounds up ceil(11/2)", seed: 0, input: "ceil(11/2)", wantString: "ceil(11/2)", wantRolls: []int{}, wantTotal: 6},
+		{name: "ceil of exact ceil(4/2)", seed: 0, input: "ceil(4/2)", wantString: "ceil(4/2)", wantRolls: []int{}, wantTotal: 2},
+		{name: "ceil towards positive infinity ceil(-3/2)", seed: 0, input: "ceil(-3/2)", wantString: "ceil(-3/2)", wantRolls: []int{}, wantTotal: -1},
+		{name: "ceil of dice division ceil(2d6/4)", seed: 2, input: "ceil(2d6/4)", wantString: "ceil(2d6/4)", wantRolls: []int{5, 1}, wantTotal: 2},
+	}
+	runRoll20TestCases(t, tests)
+}
+
 func TestRoll20Spec_Round(t *testing.T) {
 	tests := []roll20TestCase{
 		{name: "round half up round(11/2)", seed: 0, input: "round(11/2)", wantString: "round(11/2)", wantRolls: []int{}, wantTotal: 6},
