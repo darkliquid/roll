@@ -10,7 +10,7 @@ import (
 const (
 	binaryMagic0  byte = 0x52 // 'R'
 	binaryMagic1  byte = 0x4F // 'O'
-	binaryVersion byte = 0x01
+	binaryVersion byte = 0x04
 )
 
 // MarshalBinary serializes Program into a compact binary representation.
@@ -171,7 +171,7 @@ func UnmarshalProgram(data []byte) (*Program, error) {
 
 func marshalDiceTerm(buf *bytes.Buffer, dt DiceTerm) error {
 	writeVarint(buf, int64(dt.Multiplier))
-	if err := marshalDie(buf, dt.Die); err != nil {
+	if err := marshalDieTerm(buf, dt); err != nil {
 		return err
 	}
 	writeVarint(buf, int64(dt.Modifier))
@@ -191,6 +191,9 @@ func marshalDiceTerm(buf *bytes.Buffer, dt DiceTerm) error {
 	}
 	if len(dt.Rerolls) > 0 {
 		mask |= 1 << 4
+	}
+	if dt.Match != nil {
+		mask |= 1 << 5
 	}
 	buf.WriteByte(mask)
 
@@ -220,6 +223,17 @@ func marshalDiceTerm(buf *bytes.Buffer, dt DiceTerm) error {
 		}
 	}
 	buf.WriteByte(byte(dt.Sort))
+
+	if dt.Match != nil {
+		writeVarint(buf, int64(dt.Match.MinCount))
+		var matchFlags byte
+		if dt.Match.Visual {
+			matchFlags |= 1
+		}
+		buf.WriteByte(matchFlags)
+		marshalComparisonOp(buf, dt.Match.Comparison)
+	}
+
 	return nil
 }
 
@@ -230,11 +244,12 @@ func unmarshalDiceTerm(r *bytes.Reader) (dt DiceTerm, err error) {
 	}
 	dt.Multiplier = int(mult)
 
-	die, err := unmarshalDie(r)
+	die, sides, err := unmarshalDieTerm(r)
 	if err != nil {
 		return dt, err
 	}
 	dt.Die = die
+	dt.Sides = sides
 
 	mod, err := readVarint(r)
 	if err != nil {
@@ -314,6 +329,26 @@ func unmarshalDiceTerm(r *bytes.Reader) (dt DiceTerm, err error) {
 		return dt, err
 	}
 	dt.Sort = SortType(sortByte)
+
+	if mask&(1<<5) != 0 {
+		minCount, err := readVarint(r)
+		if err != nil {
+			return dt, err
+		}
+		matchFlags, err := r.ReadByte()
+		if err != nil {
+			return dt, err
+		}
+		cmp, err := unmarshalComparisonOp(r)
+		if err != nil {
+			return dt, err
+		}
+		dt.Match = &MatchOp{
+			MinCount:   int(minCount),
+			Visual:     (matchFlags & 1) != 0,
+			Comparison: cmp,
+		}
+	}
 
 	return dt, nil
 }
@@ -410,6 +445,62 @@ func unmarshalGroupTerm(r *bytes.Reader) (gt GroupTerm, err error) {
 	}
 
 	return gt, nil
+}
+
+func marshalDieTerm(buf *bytes.Buffer, dt DiceTerm) error {
+	if dt.Sides != nil {
+		buf.WriteByte(4)
+		return marshalProgram(buf, dt.Sides)
+	}
+	return marshalDie(buf, dt.Die)
+}
+
+func unmarshalDieTerm(r *bytes.Reader) (Die, *Program, error) {
+	tag, err := r.ReadByte()
+	if err != nil {
+		return nil, nil, err
+	}
+	if tag == 4 {
+		program, err := unmarshalProgram(r)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, program, nil
+	}
+	if err := r.UnreadByte(); err != nil {
+		return nil, nil, err
+	}
+
+	die, err := unmarshalDie(r)
+	if err != nil {
+		return nil, nil, err
+	}
+	return die, nil, nil
+}
+
+func marshalProgram(buf *bytes.Buffer, program *Program) error {
+	data, err := program.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	writeUvarint(buf, uint64(len(data)))
+	buf.Write(data)
+	return nil
+}
+
+func unmarshalProgram(r *bytes.Reader) (*Program, error) {
+	size, err := readUvarint(r)
+	if err != nil {
+		return nil, err
+	}
+	if size > uint64(r.Len()) {
+		return nil, fmt.Errorf("nested program length %d exceeds remaining data length %d", size, r.Len())
+	}
+	data := make([]byte, size)
+	if _, err := io.ReadFull(r, data); err != nil {
+		return nil, err
+	}
+	return UnmarshalProgram(data)
 }
 
 func marshalDie(buf *bytes.Buffer, die Die) error {

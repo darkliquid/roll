@@ -58,9 +58,14 @@ func isKeepLimit(ch rune) bool {
 	return ch == 'k'
 }
 
+// Return true if ch is a math operator or grouping character
+func isMathOp(ch rune) bool {
+	return ch == '*' || ch == '/' || ch == '%' || ch == '(' || ch == ')' || ch == '^'
+}
+
 // Return true if ch is a valid character for indicating a die roll
 func isValidDieRoll(ch rune) bool {
-	return !isWhitespace(ch) && !isGrouping(ch) && !isReroll(ch) && !isSort(ch) && !isExploding(ch) && !isCompare(ch) && !isModifier(ch) && !isKeepLimit(ch) && ch != 'd' && ch != 'D'
+	return !isWhitespace(ch) && !isGrouping(ch) && !isReroll(ch) && !isSort(ch) && !isExploding(ch) && !isCompare(ch) && !isModifier(ch) && !isKeepLimit(ch) && !isMathOp(ch) && ch != 'd' && ch != 'D' && ch != 'm'
 }
 
 // Scanner is our lexical scanner for dice roll strings
@@ -87,8 +92,36 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 	case ch == 'd':
 		s.unread()
 		return s.scanDieOrDrop()
+	case ch == 'a':
+		if s.peekPrefix("bs") {
+			s.read()
+			s.read()
+			return tFUNC, "abs"
+		}
+		return tILLEGAL, string(ch)
+	case ch == 'c':
+		if s.peekPrefix("eil") {
+			s.read()
+			s.read()
+			s.read()
+			return tFUNC, "ceil"
+		}
+		return tILLEGAL, string(ch)
 	case ch == 'f':
+		if s.peekPrefix("loor") {
+			s.read()
+			s.read()
+			s.read()
+			s.read()
+			return tFUNC, "floor"
+		}
 		return tFAILURES, string(ch)
+	case ch == 'm':
+		if s.peekPrefix("t") {
+			s.read()
+			return tMATCH, "mt"
+		}
+		return tMATCH, "m"
 	case ch == '!':
 		s.unread()
 		return s.scanExplosions()
@@ -96,8 +129,14 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 		s.unread()
 		return s.scanKeep()
 	case ch == 'r':
-		s.unread()
-		return s.scanReroll()
+		if s.peekPrefix("ound") {
+			s.read()
+			s.read()
+			s.read()
+			s.read()
+			return tFUNC, "round"
+		}
+		return s.scanReroll(ch)
 	case ch == 's':
 		s.unread()
 		return s.scanSort()
@@ -117,6 +156,20 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 		return tGROUPEND, string(ch)
 	case ch == ',':
 		return tGROUPSEP, string(ch)
+	case ch == '*':
+		if s.peekPrefix("*") {
+			s.read()
+			return tPOW, "**"
+		}
+		return tMULT, string(ch)
+	case ch == '/':
+		return tDIV, string(ch)
+	case ch == '%':
+		return tMOD, string(ch)
+	case ch == '(':
+		return tLPAREN, string(ch)
+	case ch == ')':
+		return tRPAREN, string(ch)
 	case ch == eof:
 		return tEOF, ""
 	}
@@ -187,6 +240,9 @@ func (s *Scanner) scanDieOrDrop() (tok Token, lit string) {
 			tok = tDROPLOW
 		} else if tok == tDIE && ch == 'h' {
 			tok = tDROPHIGH
+		} else if tok == tDIE && ch == '%' && buf.Len() > 1 {
+			s.unread()
+			break
 		} else if tok == tDIE && !isNumber(ch) && !isDieChar(ch) {
 			if isValidDieRoll(ch) {
 				_, _ = buf.WriteRune(ch)
@@ -265,10 +321,10 @@ func (s *Scanner) scanExplosions() (tok Token, lit string) {
 }
 
 // scanReroll consumes the current rune and all contiguous reroll runes.
-func (s *Scanner) scanReroll() (tok Token, lit string) {
+func (s *Scanner) scanReroll(lead rune) (tok Token, lit string) {
 	// Create a buffer and read the current character into it.
 	var buf bytes.Buffer
-	buf.WriteRune(s.read())
+	buf.WriteRune(lead)
 
 	// Read every subsequent character into the buffer.
 	// Rerolls are simple flags with an optional modifier
@@ -312,6 +368,15 @@ func (s *Scanner) scanSort() (tok Token, lit string) {
 
 	// Otherwise return as a regular identifier.
 	return tok, buf.String()
+}
+
+// peekPrefix reports whether the upcoming input starts with prefix without consuming it.
+func (s *Scanner) peekPrefix(prefix string) bool {
+	b, err := s.r.Peek(len(prefix))
+	if err != nil && len(b) < len(prefix) {
+		return false
+	}
+	return string(b) == prefix
 }
 
 // read reads the next rune from the buffered reader.

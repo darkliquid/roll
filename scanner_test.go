@@ -33,6 +33,9 @@ func TestScanner_Scan(t *testing.T) {
 		{s: `d6}`, tok: tDIE, lit: "d6"},
 		{s: `d6 `, tok: tDIE, lit: "d6"},
 		{s: `d6kh3`, tok: tDIE, lit: "d6"},
+		{s: `d6%`, tok: tDIE, lit: "d6"},
+		{s: `d6*`, tok: tDIE, lit: "d6"},
+		{s: `d6m`, tok: tDIE, lit: "d6"},
 
 		// Modifiers
 		{s: `+`, tok: tPLUS, lit: "+"},
@@ -67,6 +70,24 @@ func TestScanner_Scan(t *testing.T) {
 		{s: `{`, tok: tGROUPSTART, lit: "{"},
 		{s: `}`, tok: tGROUPEND, lit: "}"},
 		{s: `,`, tok: tGROUPSEP, lit: ","},
+
+		// Math operators
+		{s: `*`, tok: tMULT, lit: "*"},
+		{s: `**`, tok: tPOW, lit: "**"},
+		{s: `/`, tok: tDIV, lit: "/"},
+		{s: `%`, tok: tMOD, lit: "%"},
+		{s: `(`, tok: tLPAREN, lit: "("},
+		{s: `)`, tok: tRPAREN, lit: ")"},
+
+		// Math functions
+		{s: `floor(`, tok: tFUNC, lit: "floor"},
+		{s: `round(`, tok: tFUNC, lit: "round"},
+		{s: `ceil(`, tok: tFUNC, lit: "ceil"},
+		{s: `abs(`, tok: tFUNC, lit: "abs"},
+
+		// Dice matching
+		{s: `mt`, tok: tMATCH, lit: "mt"},
+		{s: `m`, tok: tMATCH, lit: "m"},
 	}
 
 	for i, tt := range tests {

@@ -23,11 +23,12 @@ echo "Successfully built docs/roll.wasm and synced docs/wasm_exec.js"
 """
 
 [tasks.build]
-description = "Compile every package, including the js/wasm target"
+description = "Compile every package, including the repl and js/wasm targets"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 go build ./...
+go build -o /dev/null ./cmd/repl
 GOOS=js GOARCH=wasm go build -o /dev/null ./cmd/wasm
 """
 

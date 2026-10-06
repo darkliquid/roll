@@ -18,7 +18,10 @@ func TestDefaultCatalogContainsSupportedComponents(t *testing.T) {
 		"r", "ro", // reroll
 		">", "<", "=", "f", // target / success / failure
 		"s", "sd", // sorting
-		"{}", // grouping
+		"{}",                // grouping
+		"*", "/", "%", "**", // math operators
+		"floor()", "round()", "ceil()", "abs()", // math functions
+		"mt", // dice matching
 	}
 
 	foundSyntax := make(map[string]bool)
@@ -102,10 +105,10 @@ func TestFilterComponentsByPrefix(t *testing.T) {
 				expectedSyntax: []string{"!", "!!", "!p"},
 			},
 			{
-				name:           "prefix r filters r and ro",
+				name:           "prefix r filters reroll and round",
 				input:          "4d6r",
 				cursor:         4,
-				expectedSyntax: []string{"r", "ro"},
+				expectedSyntax: []string{"r", "ro", "round()"},
 			},
 			{
 				name:           "match by name Keep filters kh and kl",

@@ -2,6 +2,7 @@ package roll
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +16,12 @@ const (
 	OpRollDice Opcode = iota
 	// OpRollGroup aggregates previously computed child results into a grouped result.
 	OpRollGroup
+	// OpPushNumber pushes a numeric literal onto the VM stack.
+	OpPushNumber
+	// OpBinary applies an arithmetic operator to the top two VM stack values.
+	OpBinary
+	// OpFunc applies a math function to the top VM stack value.
+	OpFunc
 )
 
 func (op Opcode) String() string {
@@ -23,8 +30,82 @@ func (op Opcode) String() string {
 		return "roll_dice"
 	case OpRollGroup:
 		return "roll_group"
+	case OpPushNumber:
+		return "push_number"
+	case OpBinary:
+		return "binary"
+	case OpFunc:
+		return "func"
 	default:
 		return "unknown"
+	}
+}
+
+// FuncType identifies a math function.
+type FuncType int
+
+const (
+	// FuncFloor rounds toward negative infinity.
+	FuncFloor FuncType = iota
+	// FuncRound rounds toward zero below a half and toward positive infinity at or above it.
+	FuncRound
+	// FuncCeil rounds toward positive infinity.
+	FuncCeil
+	// FuncAbs returns the absolute value.
+	FuncAbs
+)
+
+// String returns the notation for the math function.
+func (f FuncType) String() string {
+	switch f {
+	case FuncFloor:
+		return "floor"
+	case FuncRound:
+		return "round"
+	case FuncCeil:
+		return "ceil"
+	case FuncAbs:
+		return "abs"
+	default:
+		return "?"
+	}
+}
+
+// BinaryOpType identifies an arithmetic operator.
+type BinaryOpType int
+
+const (
+	// BinaryAdd adds two values.
+	BinaryAdd BinaryOpType = iota
+	// BinarySub subtracts two values.
+	BinarySub
+	// BinaryMul multiplies two values.
+	BinaryMul
+	// BinaryDiv divides two values.
+	BinaryDiv
+	// BinaryMod returns the modulus of two values.
+	BinaryMod
+	// BinaryPow raises a value to a power.
+	BinaryPow
+)
+
+// String returns the notation for the binary operator.
+func (op BinaryOpType) String() string {
+	switch op {
+	case BinaryAdd:
+		return "+"
+	case BinarySub:
+		return "-"
+	case BinaryMul:
+		return "*"
+	case BinaryDiv:
+		return "/"
+	case BinaryMod:
+		return "%"
+	case BinaryPow:
+		return "**"
+	default:
+		return "?"
 	}
 }
 
@@ -55,13 +136,17 @@ func (p *Program) String() string {
 type DiceTerm struct {
 	Multiplier int
 	Die        Die
-	Modifier   int
-	Exploding  *ExplodingOp
-	Limit      *LimitOp
-	Success    *ComparisonOp
-	Failure    *ComparisonOp
-	Rerolls    []RerollOp
-	Sort       SortType
+	// Sides, when set, is evaluated at roll time to determine the number of
+	// faces; Die is nil in that case.
+	Sides     *Program
+	Modifier  int
+	Exploding *ExplodingOp
+	Limit     *LimitOp
+	Success   *ComparisonOp
+	Failure   *ComparisonOp
+	Rerolls   []RerollOp
+	Sort      SortType
+	Match     *MatchOp
 }
 
 // GroupTerm captures the aggregation semantics of a grouped instruction.
@@ -220,6 +305,28 @@ func (op LimitOp) String() (output string) {
 	return
 }
 
+// MatchOp describes a dice matching modifier (mt counts matches, m is visual only).
+type MatchOp struct {
+	MinCount   int
+	Visual     bool
+	Comparison *ComparisonOp
+}
+
+// String returns the string representation of the dice matching modifier.
+func (m MatchOp) String() (output string) {
+	output = "mt"
+	if m.Visual {
+		output = "m"
+	}
+	if m.MinCount != 2 {
+		output += strconv.Itoa(m.MinCount)
+	}
+	if m.Comparison != nil {
+		output += m.Comparison.String()
+	}
+	return output
+}
+
 // RerollOp is the operation that defines how dice are rerolled.
 type RerollOp struct {
 	*ComparisonOp
@@ -306,6 +413,21 @@ type ErrLimitExceeded string
 
 func (e ErrLimitExceeded) Error() string { return string(e) }
 
+// ErrDivisionByZero is raised when a division or modulus operation uses a zero divisor.
+type ErrDivisionByZero string
+
+func (e ErrDivisionByZero) Error() string { return string(e) }
+
+// ErrInvalidDieSize is raised when a computed die size is not a whole number.
+type ErrInvalidDieSize string
+
+func (e ErrInvalidDieSize) Error() string { return string(e) }
+
+// ErrNonConstantDieSize is raised when a die size expression depends on rolled dice.
+type ErrNonConstantDieSize string
+
+func (e ErrNonConstantDieSize) Error() string { return string(e) }
+
 type rollContext struct {
 	limits     Limits
 	totalRolls int
@@ -349,6 +471,17 @@ func (r *Result) Swap(i, j int) {
 type vmValue struct {
 	Result   Result
 	Modifier int
+	Num      float64
+	IsNum    bool
+}
+
+// numeric returns the value used by arithmetic operations. Roll results fall
+// back to their integer total.
+func (v vmValue) numeric() float64 {
+	if v.IsNum {
+		return v.Num
+	}
+	return float64(v.Result.Total)
 }
 
 // EvaluateProgram executes a compiled roll program using DefaultLimits.
@@ -362,52 +495,172 @@ func EvaluateProgramWithLimits(program *Program, limits Limits) (Result, error) 
 		return Result{}, nil
 	}
 
-	limits = limits.normalized()
-	if program.MaxDepth > limits.MaxEvalDepth {
-		return Result{}, ErrLimitExceeded(fmt.Sprintf("roll exceeded maximum evaluation depth of %d", limits.MaxEvalDepth))
+	ctx := &rollContext{limits: limits.normalized()}
+	value, err := runProgram(ctx, program)
+	if err != nil {
+		return Result{}, err
+	}
+	return value.Result, nil
+}
+
+// runProgram runs a compiled program against a shared roll context so that
+// nested side expressions observe the same limits.
+func runProgram(ctx *rollContext, program *Program) (vmValue, error) {
+	if program.MaxDepth > ctx.limits.MaxEvalDepth {
+		return vmValue{}, ErrLimitExceeded(fmt.Sprintf("roll exceeded maximum evaluation depth of %d", ctx.limits.MaxEvalDepth))
 	}
 
-	ctx := &rollContext{limits: limits}
 	stack := make([]vmValue, 0, len(program.Code))
 
 	for _, instruction := range program.Code {
 		switch instruction.Op {
 		case OpRollDice:
 			if instruction.Arg < 0 || instruction.Arg >= len(program.DiceTerms) {
-				return Result{}, fmt.Errorf("invalid dice term index %d", instruction.Arg)
+				return vmValue{}, fmt.Errorf("invalid dice term index %d", instruction.Arg)
 			}
 			term := program.DiceTerms[instruction.Arg]
 			result, err := evalDiceTerm(ctx, term)
 			if err != nil {
-				return Result{}, err
+				return vmValue{}, err
 			}
 			stack = append(stack, vmValue{Result: result, Modifier: term.Modifier})
 		case OpRollGroup:
 			if instruction.Arg < 0 || instruction.Arg >= len(program.GroupTerms) {
-				return Result{}, fmt.Errorf("invalid group term index %d", instruction.Arg)
+				return vmValue{}, fmt.Errorf("invalid group term index %d", instruction.Arg)
 			}
 			term := program.GroupTerms[instruction.Arg]
 			if term.ChildCount > len(stack) {
-				return Result{}, fmt.Errorf("group term %d requires %d child values, stack has %d", instruction.Arg, term.ChildCount, len(stack))
+				return vmValue{}, fmt.Errorf("group term %d requires %d child values, stack has %d", instruction.Arg, term.ChildCount, len(stack))
 			}
 			children := append([]vmValue(nil), stack[len(stack)-term.ChildCount:]...)
 			stack = stack[:len(stack)-term.ChildCount]
 			result := evalGroupTerm(term, children)
 			stack = append(stack, vmValue{Result: result, Modifier: term.Modifier})
+		case OpPushNumber:
+			stack = append(stack, vmValue{Result: Result{Total: instruction.Arg}, Num: float64(instruction.Arg), IsNum: true})
+		case OpBinary:
+			if len(stack) < 2 {
+				return vmValue{}, fmt.Errorf("binary operator %d requires two values on the stack", instruction.Arg)
+			}
+			b := stack[len(stack)-1]
+			a := stack[len(stack)-2]
+			stack = stack[:len(stack)-2]
+
+			value, err := applyBinary(BinaryOpType(instruction.Arg), a.numeric(), b.numeric())
+			if err != nil {
+				return vmValue{}, err
+			}
+
+			stack = append(stack, vmValue{
+				Result: Result{
+					Total:     int(value),
+					Results:   append(append([]DieRoll{}, a.Result.Results...), b.Result.Results...),
+					Successes: a.Result.Successes + b.Result.Successes,
+				},
+				Num:   value,
+				IsNum: true,
+			})
+		case OpFunc:
+			if len(stack) < 1 {
+				return vmValue{}, fmt.Errorf("function %d requires a value on the stack", instruction.Arg)
+			}
+			a := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+
+			value, err := applyFunc(FuncType(instruction.Arg), a.numeric())
+			if err != nil {
+				return vmValue{}, err
+			}
+
+			stack = append(stack, vmValue{
+				Result: Result{
+					Total:     int(value),
+					Results:   a.Result.Results,
+					Successes: a.Result.Successes,
+				},
+				Num:   value,
+				IsNum: true,
+			})
 		default:
-			return Result{}, fmt.Errorf("unsupported opcode %d", instruction.Op)
+			return vmValue{}, fmt.Errorf("unsupported opcode %d", instruction.Op)
 		}
 	}
 
 	if len(stack) != 1 {
-		return Result{}, fmt.Errorf("program left %d results on the VM stack", len(stack))
+		return vmValue{}, fmt.Errorf("program left %d results on the VM stack", len(stack))
 	}
 
-	return stack[0].Result, nil
+	return stack[0], nil
+}
+
+// applyBinary performs an arithmetic operation, returning an error for unsafe divisors.
+func applyBinary(op BinaryOpType, a, b float64) (float64, error) {
+	switch op {
+	case BinaryAdd:
+		return a + b, nil
+	case BinarySub:
+		return a - b, nil
+	case BinaryMul:
+		return a * b, nil
+	case BinaryDiv:
+		if b == 0 {
+			return 0, ErrDivisionByZero("division by zero")
+		}
+		return a / b, nil
+	case BinaryMod:
+		if b == 0 {
+			return 0, ErrDivisionByZero("modulus by zero")
+		}
+		return math.Mod(a, b), nil
+	case BinaryPow:
+		return math.Pow(a, b), nil
+	default:
+		return 0, fmt.Errorf("unsupported binary operator %d", op)
+	}
+}
+
+// applyFunc performs a math function on a single value.
+func applyFunc(fn FuncType, x float64) (float64, error) {
+	switch fn {
+	case FuncFloor:
+		return math.Floor(x), nil
+	case FuncRound:
+		return math.Floor(x + 0.5), nil
+	case FuncCeil:
+		return math.Ceil(x), nil
+	case FuncAbs:
+		return math.Abs(x), nil
+	default:
+		return 0, fmt.Errorf("unsupported function %d", fn)
+	}
+}
+
+// resolveDie returns the concrete die for a term, evaluating a dynamic side
+// expression at roll time when present.
+func resolveDie(ctx *rollContext, term DiceTerm) (Die, error) {
+	if term.Sides == nil {
+		return term.Die, nil
+	}
+
+	value, err := runProgram(ctx, term.Sides)
+	if err != nil {
+		return nil, err
+	}
+
+	sides := value.numeric()
+	if sides != math.Trunc(sides) {
+		return nil, ErrInvalidDieSize(fmt.Sprintf("die size %v is not a whole number", sides))
+	}
+	return NormalDie(int(sides)), nil
 }
 
 func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
-	if err = validateDieLimits(term.Die, ctx.limits); err != nil {
+	die, err := resolveDie(ctx, term)
+	if err != nil {
+		return Result{}, err
+	}
+
+	if err = validateDieLimits(die, ctx.limits); err != nil {
 		return
 	}
 
@@ -430,14 +683,14 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 		if err = ctx.recordRoll(&dieRolls); err != nil {
 			return Result{}, err
 		}
-		result.Results = append(result.Results, term.Die.Roll())
+		result.Results = append(result.Results, die.Roll())
 	}
 
-	if err = applyRerolls(ctx, term, &result, &dieRolls); err != nil {
+	if err = applyRerolls(ctx, term, die, &result, &dieRolls); err != nil {
 		return Result{}, err
 	}
 
-	if err = applyExplosions(ctx, term, &result, &dieRolls); err != nil {
+	if err = applyExplosions(ctx, term, die, &result, &dieRolls); err != nil {
 		return Result{}, err
 	}
 
@@ -446,6 +699,7 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 	applyFailure(term.Failure, term.Modifier, &result)
 	applySort(term.Sort, &result)
 	finaliseTotals(term.Success, term.Failure, term.Modifier, totalMultiplier, &result)
+	applyMatch(term.Match, &result)
 
 	return result, nil
 }
@@ -507,7 +761,7 @@ func validateDieLimits(die Die, limits Limits) error {
 	return nil
 }
 
-func applyRerolls(ctx *rollContext, term DiceTerm, result *Result, dieRolls *int) error {
+func applyRerolls(ctx *rollContext, term DiceTerm, die Die, result *Result, dieRolls *int) error {
 	if len(term.Rerolls) == 0 {
 		return nil
 	}
@@ -519,7 +773,7 @@ func applyRerolls(ctx *rollContext, term DiceTerm, result *Result, dieRolls *int
 				if err := ctx.recordRoll(dieRolls); err != nil {
 					return err
 				}
-				roll = term.Die.Roll()
+				roll = die.Roll()
 				result.Results[i] = roll
 				if reroll.Once {
 					break RerollOnce
@@ -530,7 +784,7 @@ func applyRerolls(ctx *rollContext, term DiceTerm, result *Result, dieRolls *int
 	return nil
 }
 
-func applyExplosions(ctx *rollContext, term DiceTerm, result *Result, dieRolls *int) error {
+func applyExplosions(ctx *rollContext, term DiceTerm, die Die, result *Result, dieRolls *int) error {
 	if term.Exploding == nil {
 		return nil
 	}
@@ -538,33 +792,33 @@ func applyExplosions(ctx *rollContext, term DiceTerm, result *Result, dieRolls *
 	switch term.Exploding.Type {
 	case Exploding:
 		for _, roll := range result.Results {
-			for term.Exploding.Match(roll.Result, term.Die) {
+			for term.Exploding.Match(roll.Result, die) {
 				if err := ctx.recordRoll(dieRolls); err != nil {
 					return err
 				}
-				roll = term.Die.Roll()
+				roll = die.Roll()
 				result.Results = append(result.Results, roll)
 			}
 		}
 	case Compounded:
 		compound := 0
 		for _, roll := range result.Results {
-			for term.Exploding.Match(roll.Result, term.Die) {
+			for term.Exploding.Match(roll.Result, die) {
 				compound += roll.Result
 				if err := ctx.recordRoll(dieRolls); err != nil {
 					return err
 				}
-				roll = term.Die.Roll()
+				roll = die.Roll()
 			}
 		}
 		result.Results = append(result.Results, DieRoll{Result: compound, Symbol: strconv.Itoa(compound)})
 	case Penetrating:
 		for _, roll := range result.Results {
-			for term.Exploding.Match(roll.Result, term.Die) {
+			for term.Exploding.Match(roll.Result, die) {
 				if err := ctx.recordRoll(dieRolls); err != nil {
 					return err
 				}
-				roll = term.Die.Roll()
+				roll = die.Roll()
 				newRoll := roll
 				newRoll.Result--
 				newRoll.Symbol = strconv.Itoa(newRoll.Result)
@@ -605,6 +859,34 @@ func applyLimit(limitOp *LimitOp, result *Result) {
 	}
 
 	result.Results = newResults
+}
+
+// applyMatch counts the distinct face values that match often enough, and for a
+// counting (mt) modifier replaces the total with that count.
+func applyMatch(matchOp *MatchOp, result *Result) {
+	if matchOp == nil {
+		return
+	}
+
+	counts := make(map[int]int, len(result.Results))
+	for _, roll := range result.Results {
+		counts[roll.Result]++
+	}
+
+	matches := 0
+	for value, count := range counts {
+		if count < matchOp.MinCount {
+			continue
+		}
+		if matchOp.Comparison != nil && !matchOp.Comparison.Match(value) {
+			continue
+		}
+		matches++
+	}
+
+	if !matchOp.Visual {
+		result.Total = matches
+	}
 }
 
 func applySuccess(successOp *ComparisonOp, modifier int, result *Result) {
