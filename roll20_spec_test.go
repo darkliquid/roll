@@ -91,8 +91,9 @@ func TestRoll20Spec_ExplodingDice(t *testing.T) {
 		{name: "exploding greater than 2d6!>4", seed: 2, input: "2d6!>4", wantString: "2d6!>4", wantRolls: []int{5, 1, 1}, wantTotal: 7},
 		{name: "compounded exploding 2d6!!5", seed: 2, input: "2d6!!5", wantString: "2d6!!5", wantRolls: []int{5, 1, 5}, wantTotal: 11},
 		{name: "compounded greater than 2d6!!>4", seed: 2, input: "2d6!!>4", wantString: "2d6!!>4", wantRolls: []int{5, 1, 5}, wantTotal: 11},
-		{name: "penetrating exploding 2d6!p5", seed: 2, input: "2d6!p5", wantString: "2d6!p5", wantRolls: []int{5, 1, 0}, wantTotal: 6},
-		{name: "penetrating greater than 2d6!p>4", seed: 2, input: "2d6!p>4", wantString: "2d6!p>4", wantRolls: []int{5, 1, 0}, wantTotal: 6},
+		{name: "penetrating exploding 2d6!p5", seed: 2, input: "2d6!p5", wantString: "2d6!p5", wantRolls: []int{5, 1}, wantTotal: 6},
+		{name: "penetrating greater than 2d6!p>4", seed: 2, input: "2d6!p>4", wantString: "2d6!p>4", wantRolls: []int{5, 1}, wantTotal: 6},
+		{name: "penetrating keeps reduced explosion 2d6!p6", seed: 9, input: "2d6!p6", wantString: "2d6!p6", wantRolls: []int{6, 5, 4}, wantTotal: 15},
 	}
 	runRoll20TestCases(t, tests)
 }

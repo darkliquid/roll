@@ -72,3 +72,14 @@ the tree green (`go test ./...`, `go vet ./...`, `golangci-lint run`).
 - [x] Build the repl binary as part of `mise run build` (CI check).
 - [x] Document math operators, functions, matching and dynamic dice on the website.
 - [x] Add exhaustive tests for odd constructions (`4d%%2`, `2d%kh1`, ...).
+
+## Task 12 - One-sided dice (#12)
+
+- [x] Allow a one-sided die and fold it to its fixed value without rolling; skip
+      rerolls/explosions so they cannot loop.
+- [x] Tests: `d1`, `4d1`, `2d1+5`, `4d1>0`, `4d1kh3`, `4d1!`, `4d1r1`, computed `9d1`.
+
+## Task 13 - Penetrating zero (#9)
+
+- [x] Drop a penetrating die whose reduced face reaches zero from the results.
+- [x] Tests: `2d6!p5` and `2d6!p6` (kept reduced face).

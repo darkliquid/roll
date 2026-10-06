@@ -40,7 +40,7 @@ func TestEvaluateProgram_DiceTerms(t *testing.T) {
 		{name: "fate modifier", seed: 0, input: "4dF+2", res: []int{-1, -1, 0, 0}, totl: 0},
 		{name: "exploding", seed: 2, input: "2d6!5", res: []int{5, 1, 1}, totl: 7},
 		{name: "compounded", seed: 2, input: "2d6!!5", res: []int{5, 1, 5}, totl: 11},
-		{name: "penetrating", seed: 2, input: "2d6!p5", res: []int{5, 1, 0}, totl: 6},
+		{name: "penetrating", seed: 2, input: "2d6!p5", res: []int{5, 1}, totl: 6},
 		{name: "keep highest", seed: 2, input: "4d6kh3", res: []int{5, 3, 1}, totl: 9},
 		{name: "reroll once", seed: 2, input: "4d6ro<4", res: []int{5, 3, 3, 5}, totl: 16},
 		{name: "descending sort", seed: 1, input: "3d3sd", res: []int{3, 3, 1}, totl: 7},
@@ -152,8 +152,8 @@ func TestEvaluateProgramWithLimits(t *testing.T) {
 	t.Run("rejects unsafe die built in bytecode", func(t *testing.T) {
 		program := &Program{
 			Code:      []Instruction{{Op: OpRollDice, Arg: 0}},
-			DiceTerms: []DiceTerm{{Multiplier: 1, Die: NormalDie(1)}},
-			Rendered:  "d1",
+			DiceTerms: []DiceTerm{{Multiplier: 1, Die: NormalDie(0)}},
+			Rendered:  "d0",
 			MaxDepth:  1,
 		}
 
@@ -161,7 +161,7 @@ func TestEvaluateProgramWithLimits(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected unsafe die error")
 		}
-		if err.Error() != `unsafe die type "d1"` {
+		if err.Error() != `unsafe die type "d0"` {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
