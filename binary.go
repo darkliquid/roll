@@ -10,7 +10,7 @@ import (
 const (
 	binaryMagic0  byte = 0x52 // 'R'
 	binaryMagic1  byte = 0x4F // 'O'
-	binaryVersion byte = 0x01
+	binaryVersion byte = 0x02
 )
 
 // MarshalBinary serializes Program into a compact binary representation.

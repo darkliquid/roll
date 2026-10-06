@@ -3,6 +3,7 @@ package roll
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -29,6 +30,23 @@ func Canonicalize(input string) (string, error) {
 type stackNode struct {
 	rendered string
 	sortKey  string
+	prec     int
+}
+
+// atomicPrecedence is used for operands that never need parentheses.
+const atomicPrecedence = 100
+
+func binaryPrecedence(op BinaryOpType) int {
+	switch op {
+	case BinaryAdd, BinarySub:
+		return 1
+	case BinaryMul, BinaryDiv, BinaryMod:
+		return 2
+	case BinaryPow:
+		return 3
+	default:
+		return atomicPrecedence
+	}
 }
 
 func canonicalizeProgram(p *Program) string {
@@ -43,7 +61,7 @@ func canonicalizeProgram(p *Program) string {
 			term := p.DiceTerms[inst.Arg]
 			rendered := canonicalizeDiceTerm(term)
 			sortKey := diceSortKey(term, rendered)
-			stack = append(stack, stackNode{rendered: rendered, sortKey: sortKey})
+			stack = append(stack, stackNode{rendered: rendered, sortKey: sortKey, prec: atomicPrecedence})
 
 		case OpRollGroup:
 			if inst.Arg < 0 || inst.Arg >= len(p.GroupTerms) {
@@ -59,7 +77,27 @@ func canonicalizeProgram(p *Program) string {
 
 			rendered := canonicalizeGroupTerm(term, children)
 			sortKey := strings.TrimPrefix(strings.TrimPrefix(rendered, "-"), "+")
-			stack = append(stack, stackNode{rendered: rendered, sortKey: sortKey})
+			stack = append(stack, stackNode{rendered: rendered, sortKey: sortKey, prec: atomicPrecedence})
+
+		case OpPushNumber:
+			rendered := strconv.Itoa(inst.Arg)
+			stack = append(stack, stackNode{
+				rendered: rendered,
+				sortKey:  fmt.Sprintf("n%09d", inst.Arg),
+				prec:     atomicPrecedence,
+			})
+
+		case OpBinary:
+			if len(stack) < 2 {
+				return p.Rendered
+			}
+			b := stack[len(stack)-1]
+			a := stack[len(stack)-2]
+			stack = stack[:len(stack)-2]
+
+			op := BinaryOpType(inst.Arg)
+			rendered := canonicalizeBinary(op, a, b)
+			stack = append(stack, stackNode{rendered: rendered, sortKey: rendered, prec: binaryPrecedence(op)})
 		}
 	}
 
@@ -208,4 +246,38 @@ func canonicalizeGroupTerm(term GroupTerm, children []stackNode) string {
 	}
 
 	return output
+}
+
+func canonicalizeBinary(op BinaryOpType, a, b stackNode) string {
+	if op == BinaryAdd || op == BinaryMul {
+		if b.sortKey < a.sortKey {
+			a, b = b, a
+		}
+	}
+
+	prec := binaryPrecedence(op)
+	rightAssoc := op == BinaryPow
+
+	return canonicalOperand(a, prec, false, rightAssoc) + op.String() + canonicalOperand(b, prec, true, rightAssoc)
+}
+
+func canonicalOperand(n stackNode, parentPrec int, right, rightAssoc bool) string {
+	rendered := strings.TrimPrefix(n.rendered, "+")
+
+	var need bool
+	switch {
+	case right && rightAssoc:
+		need = n.prec < parentPrec
+	case right:
+		need = n.prec <= parentPrec
+	case rightAssoc:
+		need = n.prec <= parentPrec
+	default:
+		need = n.prec < parentPrec
+	}
+
+	if need {
+		return "(" + rendered + ")"
+	}
+	return rendered
 }

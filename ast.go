@@ -2,6 +2,7 @@ package roll
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +16,10 @@ const (
 	OpRollDice Opcode = iota
 	// OpRollGroup aggregates previously computed child results into a grouped result.
 	OpRollGroup
+	// OpPushNumber pushes a numeric literal onto the VM stack.
+	OpPushNumber
+	// OpBinary applies an arithmetic operator to the top two VM stack values.
+	OpBinary
 )
 
 func (op Opcode) String() string {
@@ -23,8 +28,50 @@ func (op Opcode) String() string {
 		return "roll_dice"
 	case OpRollGroup:
 		return "roll_group"
+	case OpPushNumber:
+		return "push_number"
+	case OpBinary:
+		return "binary"
 	default:
 		return "unknown"
+	}
+}
+
+// BinaryOpType identifies an arithmetic operator.
+type BinaryOpType int
+
+const (
+	// BinaryAdd adds two values.
+	BinaryAdd BinaryOpType = iota
+	// BinarySub subtracts two values.
+	BinarySub
+	// BinaryMul multiplies two values.
+	BinaryMul
+	// BinaryDiv divides two values.
+	BinaryDiv
+	// BinaryMod returns the modulus of two values.
+	BinaryMod
+	// BinaryPow raises a value to a power.
+	BinaryPow
+)
+
+// String returns the notation for the binary operator.
+func (op BinaryOpType) String() string {
+	switch op {
+	case BinaryAdd:
+		return "+"
+	case BinarySub:
+		return "-"
+	case BinaryMul:
+		return "*"
+	case BinaryDiv:
+		return "/"
+	case BinaryMod:
+		return "%"
+	case BinaryPow:
+		return "**"
+	default:
+		return "?"
 	}
 }
 
@@ -306,6 +353,11 @@ type ErrLimitExceeded string
 
 func (e ErrLimitExceeded) Error() string { return string(e) }
 
+// ErrDivisionByZero is raised when a division or modulus operation uses a zero divisor.
+type ErrDivisionByZero string
+
+func (e ErrDivisionByZero) Error() string { return string(e) }
+
 type rollContext struct {
 	limits     Limits
 	totalRolls int
@@ -349,6 +401,17 @@ func (r *Result) Swap(i, j int) {
 type vmValue struct {
 	Result   Result
 	Modifier int
+	Num      float64
+	IsNum    bool
+}
+
+// numeric returns the value used by arithmetic operations. Roll results fall
+// back to their integer total.
+func (v vmValue) numeric() float64 {
+	if v.IsNum {
+		return v.Num
+	}
+	return float64(v.Result.Total)
 }
 
 // EvaluateProgram executes a compiled roll program using DefaultLimits.
@@ -394,6 +457,30 @@ func EvaluateProgramWithLimits(program *Program, limits Limits) (Result, error) 
 			stack = stack[:len(stack)-term.ChildCount]
 			result := evalGroupTerm(term, children)
 			stack = append(stack, vmValue{Result: result, Modifier: term.Modifier})
+		case OpPushNumber:
+			stack = append(stack, vmValue{Result: Result{Total: instruction.Arg}, Num: float64(instruction.Arg), IsNum: true})
+		case OpBinary:
+			if len(stack) < 2 {
+				return Result{}, fmt.Errorf("binary operator %d requires two values on the stack", instruction.Arg)
+			}
+			b := stack[len(stack)-1]
+			a := stack[len(stack)-2]
+			stack = stack[:len(stack)-2]
+
+			value, err := applyBinary(BinaryOpType(instruction.Arg), a.numeric(), b.numeric())
+			if err != nil {
+				return Result{}, err
+			}
+
+			stack = append(stack, vmValue{
+				Result: Result{
+					Total:     int(value),
+					Results:   append(append([]DieRoll{}, a.Result.Results...), b.Result.Results...),
+					Successes: a.Result.Successes + b.Result.Successes,
+				},
+				Num:   value,
+				IsNum: true,
+			})
 		default:
 			return Result{}, fmt.Errorf("unsupported opcode %d", instruction.Op)
 		}
@@ -404,6 +491,32 @@ func EvaluateProgramWithLimits(program *Program, limits Limits) (Result, error) 
 	}
 
 	return stack[0].Result, nil
+}
+
+// applyBinary performs an arithmetic operation, returning an error for unsafe divisors.
+func applyBinary(op BinaryOpType, a, b float64) (float64, error) {
+	switch op {
+	case BinaryAdd:
+		return a + b, nil
+	case BinarySub:
+		return a - b, nil
+	case BinaryMul:
+		return a * b, nil
+	case BinaryDiv:
+		if b == 0 {
+			return 0, ErrDivisionByZero("division by zero")
+		}
+		return a / b, nil
+	case BinaryMod:
+		if b == 0 {
+			return 0, ErrDivisionByZero("modulus by zero")
+		}
+		return math.Mod(a, b), nil
+	case BinaryPow:
+		return math.Pow(a, b), nil
+	default:
+		return 0, fmt.Errorf("unsupported binary operator %d", op)
+	}
 }
 
 func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {

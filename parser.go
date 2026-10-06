@@ -58,15 +58,16 @@ func NewParserWithLimits(r io.Reader, limits Limits) *Parser {
 
 // Parse compiles a roll expression into VM bytecode.
 func (p *Parser) Parse() (program *Program, err error) {
-	tok, lit := p.scanIgnoreWhitespace()
-
-	var root compiledNode
-	root, err = p.parseRoll(tok, lit, false)
+	root, err := p.parseExpression(false, true)
 	if e, ok := err.(ErrEndOfRoll); ok && e == "" {
 		err = nil
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	if tok, lit := p.scanIgnoreWhitespace(); tok != tEOF {
+		return nil, ErrUnexpectedToken(lit)
 	}
 
 	program = &Program{
@@ -172,6 +173,63 @@ func (n *groupNode) maxDepth() int {
 	return depth
 }
 
+type numberNode struct {
+	value int
+}
+
+func (n *numberNode) emit(program *Program) {
+	program.Code = append(program.Code, Instruction{Op: OpPushNumber, Arg: n.value})
+}
+
+func (n *numberNode) render() string {
+	return strconv.Itoa(n.value)
+}
+
+func (n *numberNode) maxDepth() int {
+	return 1
+}
+
+type binaryNode struct {
+	op    BinaryOpType
+	left  compiledNode
+	right compiledNode
+}
+
+func (n *binaryNode) emit(program *Program) {
+	n.left.emit(program)
+	n.right.emit(program)
+	program.Code = append(program.Code, Instruction{Op: OpBinary, Arg: int(n.op)})
+}
+
+func (n *binaryNode) render() string {
+	if n.op == BinarySub {
+		if l, ok := n.left.(*numberNode); ok && l.value == 0 {
+			return "-" + n.right.render()
+		}
+	}
+	return n.left.render() + n.op.String() + n.right.render()
+}
+
+func (n *binaryNode) maxDepth() int {
+	return max(n.left.maxDepth(), n.right.maxDepth()) + 1
+}
+
+type parenNode struct {
+	child compiledNode
+}
+
+func (n *parenNode) emit(program *Program) {
+	n.child.emit(program)
+}
+
+func (n *parenNode) render() string {
+	return "(" + strings.TrimPrefix(n.child.render(), "+") + ")"
+}
+
+func (n *parenNode) maxDepth() int {
+	return n.child.maxDepth()
+}
+
 func renderDiceTerm(term DiceTerm) string {
 	var output strings.Builder
 	if term.Multiplier > 1 || term.Multiplier < -1 {
@@ -205,6 +263,314 @@ func renderDiceTerm(term DiceTerm) string {
 	output.WriteString(term.Sort.String())
 
 	return output.String()
+}
+
+// parseExpression parses a full math expression using the Roll20 order of operations.
+func (p *Parser) parseExpression(grouped, fold bool) (compiledNode, error) {
+	tok, lit := p.scanIgnoreWhitespace()
+	return p.parseAdditive(tok, lit, grouped, fold)
+}
+
+func (p *Parser) parseAdditive(tok Token, lit string, grouped, fold bool) (compiledNode, error) {
+	left, err := p.parseMultiplicative(tok, lit, grouped)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		t, _ := p.scanIgnoreWhitespace()
+		switch t {
+		case tPLUS, tMINUS:
+			right, err := p.parseMultiplicativeFromScan(grouped)
+			if err != nil {
+				return nil, err
+			}
+			if fold {
+				left, err = p.foldAdditive(left, t, right)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				op := BinaryAdd
+				if t == tMINUS {
+					op = BinarySub
+				}
+				left = &binaryNode{op: op, left: left, right: right}
+			}
+			if err := p.parsePostfix(left); err != nil {
+				return nil, err
+			}
+		default:
+			p.unscan()
+			return left, nil
+		}
+	}
+}
+
+func (p *Parser) parseMultiplicative(tok Token, lit string, grouped bool) (compiledNode, error) {
+	left, err := p.parseUnary(tok, lit, grouped)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		t, _ := p.scanIgnoreWhitespace()
+		switch t {
+		case tMULT, tDIV, tMOD:
+			right, err := p.parseUnaryFromScan(grouped)
+			if err != nil {
+				return nil, err
+			}
+			op := BinaryMul
+			switch t {
+			case tDIV:
+				op = BinaryDiv
+			case tMOD:
+				op = BinaryMod
+			}
+			left = &binaryNode{op: op, left: left, right: right}
+		default:
+			p.unscan()
+			return left, nil
+		}
+	}
+}
+
+func (p *Parser) parseMultiplicativeFromScan(grouped bool) (compiledNode, error) {
+	tok, lit := p.scanIgnoreWhitespace()
+	return p.parseMultiplicative(tok, lit, grouped)
+}
+
+func (p *Parser) parseUnary(tok Token, lit string, grouped bool) (compiledNode, error) {
+	switch tok {
+	case tPLUS, tMINUS:
+		t, l := p.scanIgnoreWhitespace()
+		if t == tPLUS || t == tMINUS || t == tEOF {
+			return nil, ErrUnexpectedToken(lit)
+		}
+		child, err := p.parseUnary(t, l, grouped)
+		if err != nil {
+			return nil, err
+		}
+		if tok == tMINUS {
+			return negateNode(child), nil
+		}
+		return child, nil
+	default:
+		return p.parsePower(tok, lit, grouped)
+	}
+}
+
+func (p *Parser) parseUnaryFromScan(grouped bool) (compiledNode, error) {
+	tok, lit := p.scanIgnoreWhitespace()
+	return p.parseUnary(tok, lit, grouped)
+}
+
+func (p *Parser) parsePower(tok Token, lit string, grouped bool) (compiledNode, error) {
+	left, err := p.parsePrimary(tok, lit, grouped)
+	if err != nil {
+		return nil, err
+	}
+
+	t, _ := p.scanIgnoreWhitespace()
+	if t != tPOW {
+		p.unscan()
+		return left, nil
+	}
+
+	right, err := p.parseUnaryFromScan(grouped)
+	if err != nil {
+		return nil, err
+	}
+	return &binaryNode{op: BinaryPow, left: left, right: right}, nil
+}
+
+func (p *Parser) parsePrimary(tok Token, lit string, grouped bool) (compiledNode, error) {
+	switch tok {
+	case tNUM:
+		count := lit
+		nextTok, nextLit := p.scanIgnoreWhitespace()
+		if nextTok == tDIE {
+			return p.parseDiceTerm(count, nextLit)
+		}
+		p.unscan()
+		value, err := strconv.Atoi(count)
+		if err != nil {
+			return nil, ErrUnexpectedToken(lit)
+		}
+		return &numberNode{value: value}, nil
+	case tDIE:
+		return p.parseDiceTerm("", lit)
+	case tGROUPSTART:
+		node, err := p.parseGroupedRoll(grouped)
+		if e, ok := err.(ErrEndOfRoll); ok && e == "" {
+			return node, nil
+		}
+		return node, err
+	case tLPAREN:
+		child, err := p.parseExpression(grouped, false)
+		if err != nil {
+			return nil, err
+		}
+		t, l := p.scanIgnoreWhitespace()
+		if t != tRPAREN {
+			return nil, ErrUnexpectedToken(l)
+		}
+		return &parenNode{child: child}, nil
+	default:
+		return nil, ErrUnexpectedToken(lit)
+	}
+}
+
+// parseDiceTerm parses a die and its postfix modifiers. Arithmetic operators are
+// left for the expression parser so that they observe the correct precedence.
+func (p *Parser) parseDiceTerm(count, dieCode string) (compiledNode, error) {
+	node := &diceNode{term: DiceTerm{Multiplier: 1}}
+
+	if count != "" {
+		multiplier, err := strconv.Atoi(count)
+		if err != nil {
+			return nil, ErrUnexpectedToken(count)
+		}
+		node.term.Multiplier = multiplier
+	}
+
+	die, err := p.parseDie(dieCode)
+	if err != nil {
+		return nil, err
+	}
+	node.term.Die = die
+
+	if err := p.parsePostfix(node); err != nil {
+		return nil, err
+	}
+
+	return node, nil
+}
+
+// parsePostfix consumes the postfix modifiers that attach to a dice or group term.
+func (p *Parser) parsePostfix(node compiledNode) error {
+	for {
+		tok, lit := p.scanIgnoreWhitespace()
+		switch tok {
+		case tEXPLODE, tCOMPOUND, tPENETRATE:
+			term, ok := node.(*diceNode)
+			if !ok {
+				return ErrUnexpectedToken(lit)
+			}
+			exp, err := p.parseExplosion(tok, lit)
+			if err != nil {
+				return err
+			}
+			term.term.Exploding = exp
+		case tKEEPHIGH, tKEEPLOW, tDROPHIGH, tDROPLOW:
+			limit, err := p.parseLimit(tok, lit)
+			if err != nil {
+				return err
+			}
+			switch n := node.(type) {
+			case *diceNode:
+				n.term.Limit = limit
+			case *groupNode:
+				n.term.Limit = limit
+			default:
+				return ErrUnexpectedToken(lit)
+			}
+		case tSORT:
+			term, ok := node.(*diceNode)
+			if !ok {
+				return ErrUnexpectedToken(lit)
+			}
+			switch lit {
+			case "s", "sa":
+				term.term.Sort = Ascending
+			case "sd":
+				term.term.Sort = Descending
+			}
+		case tREROLL:
+			term, ok := node.(*diceNode)
+			if !ok {
+				return ErrUnexpectedToken(lit)
+			}
+			reroll, err := p.parseReroll(lit)
+			if err != nil {
+				return err
+			}
+			term.term.Rerolls = append(term.term.Rerolls, reroll)
+		case tGREATER, tLESS, tEQUAL:
+			p.unscan()
+			cmp, err := p.parseComparison()
+			if err != nil {
+				return err
+			}
+			switch n := node.(type) {
+			case *diceNode:
+				n.term.Success = cmp
+			case *groupNode:
+				n.term.Success = cmp
+			default:
+				return ErrUnexpectedToken(lit)
+			}
+		case tFAILURES:
+			cmp, err := p.parseComparison()
+			if err != nil {
+				return err
+			}
+			switch n := node.(type) {
+			case *diceNode:
+				n.term.Failure = cmp
+			case *groupNode:
+				n.term.Failure = cmp
+			default:
+				return ErrUnexpectedToken(lit)
+			}
+		default:
+			p.unscan()
+			return nil
+		}
+	}
+}
+
+// foldAdditive keeps constant additions/subtractions attached to a dice or group
+// term so that existing normalisation is preserved, and otherwise builds a binary node.
+func (p *Parser) foldAdditive(left compiledNode, op Token, right compiledNode) (compiledNode, error) {
+	if n, ok := right.(*numberNode); ok {
+		sign := 1
+		if op == tMINUS {
+			sign = -1
+		}
+		switch l := left.(type) {
+		case *diceNode:
+			l.term.Modifier += sign * n.value
+			return l, nil
+		case *groupNode:
+			l.term.Modifier += sign * n.value
+			return l, nil
+		}
+	}
+
+	opType := BinaryAdd
+	if op == tMINUS {
+		opType = BinarySub
+	}
+	return &binaryNode{op: opType, left: left, right: right}, nil
+}
+
+// negateNode applies a unary minus, folding it into terms where possible.
+func negateNode(node compiledNode) compiledNode {
+	switch n := node.(type) {
+	case *diceNode:
+		n.term.Multiplier *= -1
+		return n
+	case *groupNode:
+		n.term.Negative = !n.term.Negative
+		return n
+	case *numberNode:
+		n.value = -n.value
+		return n
+	default:
+		return &binaryNode{op: BinarySub, left: &numberNode{value: 0}, right: node}
+	}
 }
 
 func (p *Parser) parseRoll(tok Token, lit string, grouped bool) (compiledNode, error) {
@@ -357,6 +723,9 @@ func (p *Parser) parseGroupedRoll(grouped bool) (compiledNode, error) {
 				return node, ErrEndOfRoll(lit)
 			}
 			return nil, ErrUnexpectedToken(lit)
+		case tMULT, tDIV, tMOD, tPOW, tRPAREN:
+			p.unscan()
+			return node, nil
 		case tGROUPEND:
 			p.unscan()
 			return node, nil

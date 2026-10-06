@@ -58,9 +58,14 @@ func isKeepLimit(ch rune) bool {
 	return ch == 'k'
 }
 
+// Return true if ch is a math operator or grouping character
+func isMathOp(ch rune) bool {
+	return ch == '*' || ch == '/' || ch == '%' || ch == '(' || ch == ')' || ch == '^'
+}
+
 // Return true if ch is a valid character for indicating a die roll
 func isValidDieRoll(ch rune) bool {
-	return !isWhitespace(ch) && !isGrouping(ch) && !isReroll(ch) && !isSort(ch) && !isExploding(ch) && !isCompare(ch) && !isModifier(ch) && !isKeepLimit(ch) && ch != 'd' && ch != 'D'
+	return !isWhitespace(ch) && !isGrouping(ch) && !isReroll(ch) && !isSort(ch) && !isExploding(ch) && !isCompare(ch) && !isModifier(ch) && !isKeepLimit(ch) && !isMathOp(ch) && ch != 'd' && ch != 'D'
 }
 
 // Scanner is our lexical scanner for dice roll strings
@@ -117,6 +122,12 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 		return tGROUPEND, string(ch)
 	case ch == ',':
 		return tGROUPSEP, string(ch)
+	case ch == '*':
+		return tMULT, string(ch)
+	case ch == '(':
+		return tLPAREN, string(ch)
+	case ch == ')':
+		return tRPAREN, string(ch)
 	case ch == eof:
 		return tEOF, ""
 	}

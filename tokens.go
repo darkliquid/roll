@@ -37,4 +37,13 @@ const (
 	tGROUPSTART
 	tGROUPEND
 	tGROUPSEP
+
+	// Math operators and functions
+	tMULT
+	tDIV
+	tMOD
+	tPOW
+	tLPAREN
+	tRPAREN
+	tFUNC
 )
