@@ -888,6 +888,7 @@ func applyLimit(limitOp *LimitOp, result *Result) {
 		newResults = append(newResults, rolls.Results[i])
 	}
 
+	result.Drops += len(result.Results) - len(newResults)
 	result.Results = newResults
 }
 
