@@ -109,10 +109,10 @@ func TestParser_ParseRejectsUnsafeDie(t *testing.T) {
 		err    string
 	}{
 		{
-			name:   "reject d1",
-			input:  "d1",
+			name:   "reject d0",
+			input:  "d0",
 			limits: DefaultLimits,
-			err:    `unsafe die type "d1"`,
+			err:    `unsafe die type "d0"`,
 		},
 		{
 			name:   "reject oversized die",

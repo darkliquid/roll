@@ -36,7 +36,8 @@ func TestRoll20Spec_InvalidDieSize(t *testing.T) {
 		input string
 		err   string
 	}{
-		{name: "unsafe constant die size", input: "9d(floor(3/2))", err: `unsafe die type "d1"`},
+		{name: "zero constant die size", input: "9d(1-1)", err: `unsafe die type "d0"`},
+		{name: "negative constant die size", input: "9d(0-5)", err: `unsafe die type "d-5"`},
 		{name: "fractional constant die size", input: "9d(3/2)", err: "die size 1.5 is not a whole number"},
 	}
 
@@ -60,9 +61,8 @@ func TestRoll20Spec_RuntimeDieSizeErrors(t *testing.T) {
 		input string
 		err   string
 	}{
-		{name: "unsafe resolved die size", seed: 0, input: "9d(1d6)", err: `unsafe die type "d1"`},
+		{name: "zero resolved die size", seed: 0, input: "9d(1d6-1)", err: `unsafe die type "d0"`},
 		{name: "fractional resolved die size", seed: 0, input: "9d(1d6/2)", err: "die size 0.5 is not a whole number"},
-		{name: "nested unsafe resolved die size", seed: 3, input: "3d(4d(d8)kh3+2)", err: `unsafe die type "d1"`},
 	}
 
 	for _, tt := range tests {

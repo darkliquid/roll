@@ -654,6 +654,15 @@ func resolveDie(ctx *rollContext, term DiceTerm) (Die, error) {
 	return NormalDie(int(sides)), nil
 }
 
+// fixedDieValue returns the deterministic face of a die that always rolls the
+// same value (a one-sided die), and whether the die is fixed.
+func fixedDieValue(die Die) (int, bool) {
+	if d, ok := die.(NormalDie); ok && d == 1 {
+		return 1, true
+	}
+	return 0, false
+}
+
 func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 	die, err := resolveDie(ctx, term)
 	if err != nil {
@@ -678,20 +687,29 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 		return Result{}, ErrLimitExceeded(fmt.Sprintf("die term exceeded maximum roll count of %d", ctx.limits.MaxRollsPerDie))
 	}
 
+	fixedValue, fixed := fixedDieValue(die)
 	dieRolls := 0
 	for i := 0; i < rollCount; i++ {
 		if err = ctx.recordRoll(&dieRolls); err != nil {
 			return Result{}, err
 		}
+		if fixed {
+			result.Results = append(result.Results, DieRoll{Result: fixedValue, Symbol: strconv.Itoa(fixedValue)})
+			continue
+		}
 		result.Results = append(result.Results, die.Roll())
 	}
 
-	if err = applyRerolls(ctx, term, die, &result, &dieRolls); err != nil {
-		return Result{}, err
-	}
+	// A deterministic die cannot change, so rerolls and explosions are skipped
+	// to avoid unbounded loops.
+	if !fixed {
+		if err = applyRerolls(ctx, term, die, &result, &dieRolls); err != nil {
+			return Result{}, err
+		}
 
-	if err = applyExplosions(ctx, term, die, &result, &dieRolls); err != nil {
-		return Result{}, err
+		if err = applyExplosions(ctx, term, die, &result, &dieRolls); err != nil {
+			return Result{}, err
+		}
 	}
 
 	applyLimit(term.Limit, &result)
@@ -752,7 +770,7 @@ func validateDieLimits(die Die, limits Limits) error {
 		return fmt.Errorf("unsupported die type %T for limit validation", die)
 	}
 
-	if size < 2 {
+	if size < 1 {
 		return ErrUnsafeDie(die.String())
 	}
 	if size > limits.MaxDieSize {
@@ -819,6 +837,11 @@ func applyExplosions(ctx *rollContext, term DiceTerm, die Die, result *Result, d
 					return err
 				}
 				roll = die.Roll()
+				if roll.Result <= 1 {
+					// A penetrating die reduced to zero cannot be rolled, so it
+					// is dropped from the results entirely.
+					break
+				}
 				newRoll := roll
 				newRoll.Result--
 				newRoll.Symbol = strconv.Itoa(newRoll.Result)
