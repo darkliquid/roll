@@ -104,6 +104,10 @@ func TestRoll20Spec_KeepDrop(t *testing.T) {
 		{name: "drop highest 4d6dh1", seed: 2, input: "4d6dh1", wantString: "4d6dh", wantRolls: []int{3, 1, 1}, wantTotal: 5},
 		{name: "drop lowest 4d6dl1", seed: 2, input: "4d6dl1", wantString: "4d6dl", wantRolls: []int{5, 3, 1}, wantTotal: 9},
 		{name: "keep highest with modifier 4d6kh3+2", seed: 2, input: "4d6kh3+2", wantString: "4d6+2kh3", wantRolls: []int{5, 3, 1}, wantTotal: 11},
+		{name: "keep highest drops duplicate boundary 4d6kh3", seed: 13, input: "4d6kh3", wantString: "4d6kh3", wantRolls: []int{5, 4, 4}, wantTotal: 13},
+		{name: "keep lowest drops duplicate boundary 4d6kl2", seed: 13, input: "4d6kl2", wantString: "4d6kl2", wantRolls: []int{4, 4}, wantTotal: 8},
+		{name: "drop highest drops duplicate boundary 4d6dh1", seed: 1, input: "4d6dh1", wantString: "4d6dh", wantRolls: []int{6, 6, 4}, wantTotal: 16},
+		{name: "drop lowest drops duplicate boundary 4d6dl1", seed: 13, input: "4d6dl1", wantString: "4d6dl", wantRolls: []int{5, 4, 4}, wantTotal: 13},
 	}
 	runRoll20TestCases(t, tests)
 }

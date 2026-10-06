@@ -686,60 +686,12 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 		result.Results = append(result.Results, die.Roll())
 	}
 
-	for i, roll := range result.Results {
-	RerollOnce:
-		for _, reroll := range term.Rerolls {
-			for reroll.Match(roll.Result) {
-				if err = ctx.recordRoll(&dieRolls); err != nil {
-					return Result{}, err
-				}
-				roll = die.Roll()
-				result.Results[i] = roll
-				if reroll.Once {
-					break RerollOnce
-				}
-			}
-		}
+	if err = applyRerolls(ctx, term, die, &result, &dieRolls); err != nil {
+		return Result{}, err
 	}
 
-	if term.Exploding != nil {
-		switch term.Exploding.Type {
-		case Exploding:
-			for _, roll := range result.Results {
-				for term.Exploding.Match(roll.Result, die) {
-					if err = ctx.recordRoll(&dieRolls); err != nil {
-						return Result{}, err
-					}
-					roll = die.Roll()
-					result.Results = append(result.Results, roll)
-				}
-			}
-		case Compounded:
-			compound := 0
-			for _, roll := range result.Results {
-				for term.Exploding.Match(roll.Result, die) {
-					compound += roll.Result
-					if err = ctx.recordRoll(&dieRolls); err != nil {
-						return Result{}, err
-					}
-					roll = die.Roll()
-				}
-			}
-			result.Results = append(result.Results, DieRoll{Result: compound, Symbol: strconv.Itoa(compound)})
-		case Penetrating:
-			for _, roll := range result.Results {
-				for term.Exploding.Match(roll.Result, die) {
-					if err = ctx.recordRoll(&dieRolls); err != nil {
-						return Result{}, err
-					}
-					roll = die.Roll()
-					newRoll := roll
-					newRoll.Result--
-					newRoll.Symbol = strconv.Itoa(newRoll.Result)
-					result.Results = append(result.Results, newRoll)
-				}
-			}
-		}
+	if err = applyExplosions(ctx, term, die, &result, &dieRolls); err != nil {
+		return Result{}, err
 	}
 
 	applyLimit(term.Limit, &result)
@@ -809,43 +761,104 @@ func validateDieLimits(die Die, limits Limits) error {
 	return nil
 }
 
-func applyLimit(limitOp *LimitOp, result *Result) {
-	if limitOp != nil {
-		var rolls Result
-		rolls.Results = result.Results[:]
-		sort.Sort(&rolls)
+func applyRerolls(ctx *rollContext, term DiceTerm, die Die, result *Result, dieRolls *int) error {
+	if len(term.Rerolls) == 0 {
+		return nil
+	}
 
-		limit := min(limitOp.Amount, len(rolls.Results))
-
-		switch limitOp.Type {
-		case KeepHighest:
-			rolls.Results = rolls.Results[len(rolls.Results)-limit:]
-		case KeepLowest:
-			rolls.Results = rolls.Results[:limit]
-		case DropHighest:
-			rolls.Results = rolls.Results[:len(rolls.Results)-limit]
-		case DropLowest:
-			rolls.Results = rolls.Results[limit:]
-		}
-
-		m := make(map[int]int, len(rolls.Results))
-		for _, r := range rolls.Results {
-			m[r.Result]++
-		}
-
-		newResults := make([]DieRoll, 0, len(rolls.Results))
-		for _, a := range result.Results {
-			if b, ok := m[a.Result]; ok {
-				newResults = append([]DieRoll{a}, newResults...)
-				b--
-				if b == 0 {
-					delete(m, a.Result)
+	for i, roll := range result.Results {
+	RerollOnce:
+		for _, reroll := range term.Rerolls {
+			for reroll.Match(roll.Result) {
+				if err := ctx.recordRoll(dieRolls); err != nil {
+					return err
+				}
+				roll = die.Roll()
+				result.Results[i] = roll
+				if reroll.Once {
+					break RerollOnce
 				}
 			}
 		}
-
-		result.Results = newResults
 	}
+	return nil
+}
+
+func applyExplosions(ctx *rollContext, term DiceTerm, die Die, result *Result, dieRolls *int) error {
+	if term.Exploding == nil {
+		return nil
+	}
+
+	switch term.Exploding.Type {
+	case Exploding:
+		for _, roll := range result.Results {
+			for term.Exploding.Match(roll.Result, die) {
+				if err := ctx.recordRoll(dieRolls); err != nil {
+					return err
+				}
+				roll = die.Roll()
+				result.Results = append(result.Results, roll)
+			}
+		}
+	case Compounded:
+		compound := 0
+		for _, roll := range result.Results {
+			for term.Exploding.Match(roll.Result, die) {
+				compound += roll.Result
+				if err := ctx.recordRoll(dieRolls); err != nil {
+					return err
+				}
+				roll = die.Roll()
+			}
+		}
+		result.Results = append(result.Results, DieRoll{Result: compound, Symbol: strconv.Itoa(compound)})
+	case Penetrating:
+		for _, roll := range result.Results {
+			for term.Exploding.Match(roll.Result, die) {
+				if err := ctx.recordRoll(dieRolls); err != nil {
+					return err
+				}
+				roll = die.Roll()
+				newRoll := roll
+				newRoll.Result--
+				newRoll.Symbol = strconv.Itoa(newRoll.Result)
+				result.Results = append(result.Results, newRoll)
+			}
+		}
+	}
+
+	return nil
+}
+
+func applyLimit(limitOp *LimitOp, result *Result) {
+	if limitOp == nil {
+		return
+	}
+
+	rolls := Result{Results: make([]DieRoll, len(result.Results))}
+	copy(rolls.Results, result.Results)
+	sort.Sort(&rolls)
+
+	limit := max(min(limitOp.Amount, len(rolls.Results)), 0)
+
+	switch limitOp.Type {
+	case KeepHighest:
+		rolls.Results = rolls.Results[len(rolls.Results)-limit:]
+	case KeepLowest:
+		rolls.Results = rolls.Results[:limit]
+	case DropHighest:
+		rolls.Results = rolls.Results[:len(rolls.Results)-limit]
+	case DropLowest:
+		rolls.Results = rolls.Results[limit:]
+	}
+
+	// Render the surviving dice in descending order.
+	newResults := make([]DieRoll, 0, len(rolls.Results))
+	for i := len(rolls.Results) - 1; i >= 0; i-- {
+		newResults = append(newResults, rolls.Results[i])
+	}
+
+	result.Results = newResults
 }
 
 // applyMatch counts the distinct face values that match often enough, and for a
