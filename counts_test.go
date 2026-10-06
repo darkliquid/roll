@@ -2,6 +2,39 @@ package roll
 
 import "testing"
 
+func TestResultCounts_Aggregation(t *testing.T) {
+	tests := []struct {
+		name       string
+		seed       int64
+		input      string
+		rerolls    int
+		explosions int
+		drops      int
+	}{
+		{name: "separate terms sum explosions", seed: 6, input: "2d6!5+2d6!5", explosions: 2},
+		{name: "separated group sums child explosions", seed: 2, input: "{2d6!5, 1d8}", explosions: 1},
+		{name: "combined group sums child explosions", seed: 2, input: "{2d6!5 + 1d8}", explosions: 1},
+		{name: "nested groups sum events", seed: 2, input: "{{2d6!5}, 1d8}", explosions: 1},
+		{name: "group limit counts drops", seed: 0, input: "{3d6, 2d8}dl1", drops: 1},
+		{name: "rerolls and drops across a term", seed: 2, input: "4d6ro1kh3", rerolls: 2, drops: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evaluateProgram(t, tt.seed, tt.input)
+			if result.Rerolls != tt.rerolls {
+				t.Fatalf("rerolls: got %d want %d", result.Rerolls, tt.rerolls)
+			}
+			if result.Explosions != tt.explosions {
+				t.Fatalf("explosions: got %d want %d", result.Explosions, tt.explosions)
+			}
+			if result.Drops != tt.drops {
+				t.Fatalf("drops: got %d want %d", result.Drops, tt.drops)
+			}
+		})
+	}
+}
+
 func TestResultCounts_Drops(t *testing.T) {
 	tests := []struct {
 		name  string

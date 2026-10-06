@@ -556,9 +556,12 @@ func runProgram(ctx *rollContext, program *Program) (vmValue, error) {
 
 			stack = append(stack, vmValue{
 				Result: Result{
-					Total:     int(value),
-					Results:   append(append([]DieRoll{}, a.Result.Results...), b.Result.Results...),
-					Successes: a.Result.Successes + b.Result.Successes,
+					Total:      int(value),
+					Results:    append(append([]DieRoll{}, a.Result.Results...), b.Result.Results...),
+					Successes:  a.Result.Successes + b.Result.Successes,
+					Rerolls:    a.Result.Rerolls + b.Result.Rerolls,
+					Explosions: a.Result.Explosions + b.Result.Explosions,
+					Drops:      a.Result.Drops + b.Result.Drops,
 				},
 				Num:   value,
 				IsNum: true,
@@ -727,6 +730,10 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 
 func evalGroupTerm(term GroupTerm, children []vmValue) (result Result) {
 	for _, child := range children {
+		result.Rerolls += child.Result.Rerolls
+		result.Explosions += child.Result.Explosions
+		result.Drops += child.Result.Drops
+
 		if term.Combined {
 			for _, res := range child.Result.Results {
 				result.Results = append(result.Results, DieRoll{
