@@ -107,3 +107,33 @@ func TestResultCounts_Rerolls(t *testing.T) {
 		})
 	}
 }
+
+func TestResultCounts_DynamicDieFacesExcluded(t *testing.T) {
+	// The side expression 2d6!6 explodes three times for seed 1, but those
+	// events belong to the face calculation and must not reach the result.
+	if side := evaluateProgram(t, 1, "2d6!6"); side.Explosions != 3 {
+		t.Fatalf("precondition: side explosions = %d, want 3", side.Explosions)
+	}
+	if outer := evaluateProgram(t, 1, "3d(2d6!6)"); outer.Explosions != 0 {
+		t.Fatalf("outer explosions = %d, want 0", outer.Explosions)
+	}
+
+	tests := []struct {
+		name  string
+		seed  int64
+		input string
+		drops int
+	}{
+		{name: "side keep/drop is excluded", seed: 0, input: "3d(4d6kh3)", drops: 0},
+		{name: "only the outer keep/drop counts", seed: 0, input: "3d(4d6kh3)kh1", drops: 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evaluateProgram(t, tt.seed, tt.input)
+			if result.Drops != tt.drops {
+				t.Fatalf("drops: got %d want %d", result.Drops, tt.drops)
+			}
+		})
+	}
+}
