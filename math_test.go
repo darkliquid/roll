@@ -25,6 +25,16 @@ func TestRoll20Spec_Division(t *testing.T) {
 	runRoll20TestCases(t, tests)
 }
 
+func TestRoll20Spec_Abs(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "abs of negative constant abs(-3)", seed: 0, input: "abs(-3)", wantString: "abs(-3)", wantRolls: []int{}, wantTotal: 3},
+		{name: "abs of positive constant abs(3)", seed: 0, input: "abs(3)", wantString: "abs(3)", wantRolls: []int{}, wantTotal: 3},
+		{name: "abs of subtraction abs(3-10)", seed: 0, input: "abs(3-10)", wantString: "abs(3-10)", wantRolls: []int{}, wantTotal: 7},
+		{name: "abs of negative dice abs(-2d6)", seed: 2, input: "abs(-2d6)", wantString: "abs(-2d6)", wantRolls: []int{5, 1}, wantTotal: 6},
+	}
+	runRoll20TestCases(t, tests)
+}
+
 func TestRoll20Spec_Ceil(t *testing.T) {
 	tests := []roll20TestCase{
 		{name: "ceil rounds up ceil(11/2)", seed: 0, input: "ceil(11/2)", wantString: "ceil(11/2)", wantRolls: []int{}, wantTotal: 6},
