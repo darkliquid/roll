@@ -1,9 +1,45 @@
 package roll
 
 import (
+	"encoding/json"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
+
+func TestParseStringManual(t *testing.T) {
+	seedEnv := os.Getenv("SEED")
+	roll := os.Getenv("ROLL")
+	if seedEnv == "" || roll == "" {
+		t.Log("SEED and ROLL must be set on env to run this test")
+		t.SkipNow()
+	}
+
+	seed, err := strconv.ParseInt(seedEnv, 10, 64)
+	if err != nil {
+		t.Fatalf("invalid seed %q error: %v", seedEnv, err)
+	}
+
+	program, err := CompileString(roll)
+	if err != nil {
+		t.Fatalf("compile %q error: %v", roll, err)
+	}
+
+	progBytes, _ := json.MarshalIndent(program, "", "  ")
+	t.Logf("PROGRAM: %s", string(progBytes))
+
+	var result Result
+	withTestSeed(seed, func() {
+		result, err = EvaluateProgram(program)
+	})
+	if err != nil {
+		t.Fatalf("evaluate %q error: %v", roll, err)
+	}
+
+	resBytes, _ := json.MarshalIndent(result, "", "  ")
+	t.Logf("RESULTS: %s", string(resBytes))
+}
 
 // Ensure the parser works
 func TestParse(t *testing.T) {
