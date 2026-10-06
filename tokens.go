@@ -46,4 +46,5 @@ const (
 	tLPAREN
 	tRPAREN
 	tFUNC
+	tMATCH
 )

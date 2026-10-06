@@ -65,7 +65,7 @@ func isMathOp(ch rune) bool {
 
 // Return true if ch is a valid character for indicating a die roll
 func isValidDieRoll(ch rune) bool {
-	return !isWhitespace(ch) && !isGrouping(ch) && !isReroll(ch) && !isSort(ch) && !isExploding(ch) && !isCompare(ch) && !isModifier(ch) && !isKeepLimit(ch) && !isMathOp(ch) && ch != 'd' && ch != 'D'
+	return !isWhitespace(ch) && !isGrouping(ch) && !isReroll(ch) && !isSort(ch) && !isExploding(ch) && !isCompare(ch) && !isModifier(ch) && !isKeepLimit(ch) && !isMathOp(ch) && ch != 'd' && ch != 'D' && ch != 'm'
 }
 
 // Scanner is our lexical scanner for dice roll strings
@@ -116,6 +116,12 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 			return tFUNC, "floor"
 		}
 		return tFAILURES, string(ch)
+	case ch == 'm':
+		if s.peekPrefix("t") {
+			s.read()
+			return tMATCH, "mt"
+		}
+		return tMATCH, "m"
 	case ch == '!':
 		s.unread()
 		return s.scanExplosions()

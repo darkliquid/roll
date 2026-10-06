@@ -10,7 +10,7 @@ import (
 const (
 	binaryMagic0  byte = 0x52 // 'R'
 	binaryMagic1  byte = 0x4F // 'O'
-	binaryVersion byte = 0x02
+	binaryVersion byte = 0x03
 )
 
 // MarshalBinary serializes Program into a compact binary representation.
@@ -192,6 +192,9 @@ func marshalDiceTerm(buf *bytes.Buffer, dt DiceTerm) error {
 	if len(dt.Rerolls) > 0 {
 		mask |= 1 << 4
 	}
+	if dt.Match != nil {
+		mask |= 1 << 5
+	}
 	buf.WriteByte(mask)
 
 	if dt.Exploding != nil {
@@ -220,6 +223,17 @@ func marshalDiceTerm(buf *bytes.Buffer, dt DiceTerm) error {
 		}
 	}
 	buf.WriteByte(byte(dt.Sort))
+
+	if dt.Match != nil {
+		writeVarint(buf, int64(dt.Match.MinCount))
+		var matchFlags byte
+		if dt.Match.Visual {
+			matchFlags |= 1
+		}
+		buf.WriteByte(matchFlags)
+		marshalComparisonOp(buf, dt.Match.Comparison)
+	}
+
 	return nil
 }
 
@@ -314,6 +328,26 @@ func unmarshalDiceTerm(r *bytes.Reader) (dt DiceTerm, err error) {
 		return dt, err
 	}
 	dt.Sort = SortType(sortByte)
+
+	if mask&(1<<5) != 0 {
+		minCount, err := readVarint(r)
+		if err != nil {
+			return dt, err
+		}
+		matchFlags, err := r.ReadByte()
+		if err != nil {
+			return dt, err
+		}
+		cmp, err := unmarshalComparisonOp(r)
+		if err != nil {
+			return dt, err
+		}
+		dt.Match = &MatchOp{
+			MinCount:   int(minCount),
+			Visual:     (matchFlags & 1) != 0,
+			Comparison: cmp,
+		}
+	}
 
 	return dt, nil
 }

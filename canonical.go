@@ -187,6 +187,11 @@ func canonicalizeDiceTerm(term DiceTerm) string {
 	// Sort
 	output.WriteString(term.Sort.String())
 
+	// Matching
+	if term.Match != nil {
+		output.WriteString(term.Match.String())
+	}
+
 	return output.String()
 }
 

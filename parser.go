@@ -282,6 +282,9 @@ func renderDiceTerm(term DiceTerm) string {
 		output.WriteString("f" + term.Failure.String())
 	}
 	output.WriteString(term.Sort.String())
+	if term.Match != nil {
+		output.WriteString(term.Match.String())
+	}
 
 	return output.String()
 }
@@ -551,6 +554,16 @@ func (p *Parser) parsePostfix(node compiledNode) error {
 				return err
 			}
 			term.term.Rerolls = append(term.term.Rerolls, reroll)
+		case tMATCH:
+			term, ok := node.(*diceNode)
+			if !ok {
+				return ErrUnexpectedToken(lit)
+			}
+			match, err := p.parseMatch(lit)
+			if err != nil {
+				return err
+			}
+			term.term.Match = match
 		case tGREATER, tLESS, tEQUAL:
 			p.unscan()
 			cmp, err := p.parseComparison()
@@ -903,6 +916,39 @@ func (p *Parser) parseReroll(lit string) (rr RerollOp, err error) {
 
 	rr.ComparisonOp = compOp
 	return rr, nil
+}
+
+func (p *Parser) parseMatch(lit string) (*MatchOp, error) {
+	match := &MatchOp{MinCount: 2}
+	if lit == "m" {
+		match.Visual = true
+	}
+
+	tok, numLit := p.scanIgnoreWhitespace()
+	if tok == tNUM {
+		count, err := strconv.Atoi(numLit)
+		if err != nil {
+			return nil, err
+		}
+		match.MinCount = count
+	} else {
+		p.unscan()
+	}
+
+	tok, _ = p.scanIgnoreWhitespace()
+	switch tok {
+	case tGREATER, tLESS, tEQUAL:
+		p.unscan()
+		cmp, err := p.parseComparison()
+		if err != nil {
+			return nil, err
+		}
+		match.Comparison = cmp
+	default:
+		p.unscan()
+	}
+
+	return match, nil
 }
 
 func (p *Parser) parseModifier(tok Token) (int, error) {

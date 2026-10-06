@@ -25,6 +25,20 @@ func TestRoll20Spec_Division(t *testing.T) {
 	runRoll20TestCases(t, tests)
 }
 
+func TestRoll20Spec_DiceMatching(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "no matches 2d6mt", seed: 2, input: "2d6mt", wantString: "2d6mt", wantRolls: []int{5, 1}, wantTotal: 0},
+		{name: "visual match keeps total 2d6m", seed: 2, input: "2d6m", wantString: "2d6m", wantRolls: []int{5, 1}, wantTotal: 6},
+		{name: "three of a kind 4d6mt3", seed: 1, input: "4d6mt3", wantString: "4d6mt3", wantRolls: []int{6, 4, 6, 6}, wantTotal: 1},
+		{name: "default two of a kind 4d6mt", seed: 1, input: "4d6mt", wantString: "4d6mt", wantRolls: []int{6, 4, 6, 6}, wantTotal: 1},
+		{name: "visual three of a kind 4d6m3", seed: 1, input: "4d6m3", wantString: "4d6m3", wantRolls: []int{6, 4, 6, 6}, wantTotal: 22},
+		{name: "matching value filter 4d6mt3>5", seed: 1, input: "4d6mt3>5", wantString: "4d6mt3>5", wantRolls: []int{6, 4, 6, 6}, wantTotal: 1},
+		{name: "matching value filter excludes 4d6mt3>6", seed: 1, input: "4d6mt3>6", wantString: "4d6mt3>6", wantRolls: []int{6, 4, 6, 6}, wantTotal: 0},
+		{name: "insufficient matches 4d6mt4", seed: 1, input: "4d6mt4", wantString: "4d6mt4", wantRolls: []int{6, 4, 6, 6}, wantTotal: 0},
+	}
+	runRoll20TestCases(t, tests)
+}
+
 func TestRoll20Spec_Abs(t *testing.T) {
 	tests := []roll20TestCase{
 		{name: "abs of negative constant abs(-3)", seed: 0, input: "abs(-3)", wantString: "abs(-3)", wantRolls: []int{}, wantTotal: 3},

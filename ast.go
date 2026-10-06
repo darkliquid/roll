@@ -143,6 +143,7 @@ type DiceTerm struct {
 	Failure    *ComparisonOp
 	Rerolls    []RerollOp
 	Sort       SortType
+	Match      *MatchOp
 }
 
 // GroupTerm captures the aggregation semantics of a grouped instruction.
@@ -299,6 +300,28 @@ func (op LimitOp) String() (output string) {
 	}
 
 	return
+}
+
+// MatchOp describes a dice matching modifier (mt counts matches, m is visual only).
+type MatchOp struct {
+	MinCount   int
+	Visual     bool
+	Comparison *ComparisonOp
+}
+
+// String returns the string representation of the dice matching modifier.
+func (m MatchOp) String() (output string) {
+	output = "mt"
+	if m.Visual {
+		output = "m"
+	}
+	if m.MinCount != 2 {
+		output += strconv.Itoa(m.MinCount)
+	}
+	if m.Comparison != nil {
+		output += m.Comparison.String()
+	}
+	return output
 }
 
 // RerollOp is the operation that defines how dice are rerolled.
@@ -678,6 +701,7 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 	applyFailure(term.Failure, term.Modifier, &result)
 	applySort(term.Sort, &result)
 	finaliseTotals(term.Success, term.Failure, term.Modifier, totalMultiplier, &result)
+	applyMatch(term.Match, &result)
 
 	return result, nil
 }
@@ -775,6 +799,34 @@ func applyLimit(limitOp *LimitOp, result *Result) {
 		}
 
 		result.Results = newResults
+	}
+}
+
+// applyMatch counts the distinct face values that match often enough, and for a
+// counting (mt) modifier replaces the total with that count.
+func applyMatch(matchOp *MatchOp, result *Result) {
+	if matchOp == nil {
+		return
+	}
+
+	counts := make(map[int]int, len(result.Results))
+	for _, roll := range result.Results {
+		counts[roll.Result]++
+	}
+
+	matches := 0
+	for value, count := range counts {
+		if count < matchOp.MinCount {
+			continue
+		}
+		if matchOp.Comparison != nil && !matchOp.Comparison.Match(value) {
+			continue
+		}
+		matches++
+	}
+
+	if !matchOp.Visual {
+		result.Total = matches
 	}
 }
 
