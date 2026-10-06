@@ -448,9 +448,12 @@ func (ctx *rollContext) recordRoll(perDie *int) error {
 
 // Result is a collection of die rolls and a count of successes.
 type Result struct {
-	Results   []DieRoll
-	Total     int
-	Successes int
+	Results    []DieRoll
+	Total      int
+	Successes  int
+	Rerolls    int
+	Explosions int
+	Drops      int
 }
 
 // Len is the number of results.
@@ -553,9 +556,12 @@ func runProgram(ctx *rollContext, program *Program) (vmValue, error) {
 
 			stack = append(stack, vmValue{
 				Result: Result{
-					Total:     int(value),
-					Results:   append(append([]DieRoll{}, a.Result.Results...), b.Result.Results...),
-					Successes: a.Result.Successes + b.Result.Successes,
+					Total:      int(value),
+					Results:    append(append([]DieRoll{}, a.Result.Results...), b.Result.Results...),
+					Successes:  a.Result.Successes + b.Result.Successes,
+					Rerolls:    a.Result.Rerolls + b.Result.Rerolls,
+					Explosions: a.Result.Explosions + b.Result.Explosions,
+					Drops:      a.Result.Drops + b.Result.Drops,
 				},
 				Num:   value,
 				IsNum: true,
@@ -724,6 +730,10 @@ func evalDiceTerm(ctx *rollContext, term DiceTerm) (result Result, err error) {
 
 func evalGroupTerm(term GroupTerm, children []vmValue) (result Result) {
 	for _, child := range children {
+		result.Rerolls += child.Result.Rerolls
+		result.Explosions += child.Result.Explosions
+		result.Drops += child.Result.Drops
+
 		if term.Combined {
 			for _, res := range child.Result.Results {
 				result.Results = append(result.Results, DieRoll{
@@ -793,6 +803,7 @@ func applyRerolls(ctx *rollContext, term DiceTerm, die Die, result *Result, dieR
 				}
 				roll = die.Roll()
 				result.Results[i] = roll
+				result.Rerolls++
 				if reroll.Once {
 					break RerollOnce
 				}
@@ -816,6 +827,7 @@ func applyExplosions(ctx *rollContext, term DiceTerm, die Die, result *Result, d
 				}
 				roll = die.Roll()
 				result.Results = append(result.Results, roll)
+				result.Explosions++
 			}
 		}
 	case Compounded:
@@ -827,6 +839,7 @@ func applyExplosions(ctx *rollContext, term DiceTerm, die Die, result *Result, d
 					return err
 				}
 				roll = die.Roll()
+				result.Explosions++
 			}
 		}
 		result.Results = append(result.Results, DieRoll{Result: compound, Symbol: strconv.Itoa(compound)})
@@ -846,6 +859,7 @@ func applyExplosions(ctx *rollContext, term DiceTerm, die Die, result *Result, d
 				newRoll.Result--
 				newRoll.Symbol = strconv.Itoa(newRoll.Result)
 				result.Results = append(result.Results, newRoll)
+				result.Explosions++
 			}
 		}
 	}
@@ -881,6 +895,7 @@ func applyLimit(limitOp *LimitOp, result *Result) {
 		newResults = append(newResults, rolls.Results[i])
 	}
 
+	result.Drops += len(result.Results) - len(newResults)
 	result.Results = newResults
 }
 

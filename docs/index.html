@@ -453,6 +453,7 @@
         <div class="result-meta">
           <div class="formula" id="formula"></div>
           <div class="metric" id="metric" hidden></div>
+          <div class="metric" id="stats" hidden></div>
         </div>
       </div>
       <div class="dice-chips" id="dice-chips"></div>
@@ -606,6 +607,7 @@
       var totalValue = document.getElementById("total-value");
       var formula = document.getElementById("formula");
       var metric = document.getElementById("metric");
+      var stats = document.getElementById("stats");
       var chips = document.getElementById("dice-chips");
       var errorBox = document.getElementById("error");
 
@@ -634,6 +636,18 @@
         if (resp.hasSuccesses) {
           metric.textContent = "Successes: " + resp.successes;
         }
+        var statsParts = [];
+        if (resp.hasRerolls) {
+          statsParts.push("Rerolls: " + (resp.rerolls || 0));
+        }
+        if (resp.hasExplosions) {
+          statsParts.push("Explosions: " + (resp.explosions || 0));
+        }
+        if (resp.hasDrops) {
+          statsParts.push("Drops: " + (resp.drops || 0));
+        }
+        stats.hidden = statsParts.length === 0;
+        stats.textContent = statsParts.join(" \u00b7 ");
         chips.textContent = "";
         (resp.results || []).forEach(function (die) {
           var chip = document.createElement("span");

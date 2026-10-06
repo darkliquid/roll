@@ -41,6 +41,51 @@ func TestEvaluateRoll_FateDie(t *testing.T) {
 	}
 }
 
+func TestEvaluateRoll_EventCounts(t *testing.T) {
+	t.Run("drop only", func(t *testing.T) {
+		resp := EvaluateRoll("4d6kh3")
+		if !resp.OK {
+			t.Fatalf("expected OK=true, got error: %s", resp.Error)
+		}
+		if !resp.HasDrops || resp.Drops != 1 {
+			t.Errorf("expected HasDrops with 1 drop, got has=%v drops=%d", resp.HasDrops, resp.Drops)
+		}
+		if resp.HasRerolls || resp.HasExplosions {
+			t.Errorf("unexpected reroll/explosion flags: %+v", resp)
+		}
+	})
+
+	t.Run("explosion present but may not fire", func(t *testing.T) {
+		resp := EvaluateRoll("4d6!")
+		if !resp.OK {
+			t.Fatalf("expected OK=true, got error: %s", resp.Error)
+		}
+		if !resp.HasExplosions {
+			t.Errorf("expected HasExplosions for a roll containing explosions")
+		}
+	})
+
+	t.Run("reroll flag", func(t *testing.T) {
+		resp := EvaluateRoll("4d6ro1")
+		if !resp.OK {
+			t.Fatalf("expected OK=true, got error: %s", resp.Error)
+		}
+		if !resp.HasRerolls {
+			t.Errorf("expected HasRerolls for a roll containing rerolls")
+		}
+	})
+
+	t.Run("plain roll has no event flags", func(t *testing.T) {
+		resp := EvaluateRoll("4d6")
+		if !resp.OK {
+			t.Fatalf("expected OK=true, got error: %s", resp.Error)
+		}
+		if resp.HasRerolls || resp.HasExplosions || resp.HasDrops {
+			t.Errorf("unexpected flags for a plain roll: %+v", resp)
+		}
+	})
+}
+
 func TestEvaluateRoll_Error(t *testing.T) {
 	resp := EvaluateRoll("invalid_dice")
 	if resp.OK {
