@@ -25,6 +25,29 @@ func TestRoll20Spec_Division(t *testing.T) {
 	runRoll20TestCases(t, tests)
 }
 
+func TestRoll20Spec_Modulus(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "dice modulus constant 2d6%3", seed: 2, input: "2d6%3", wantString: "2d6%3", wantRolls: []int{5, 1}, wantTotal: 0},
+		{name: "constant modulus constant 7%3", seed: 0, input: "7%3", wantString: "7%3", wantRolls: []int{}, wantTotal: 1},
+		{name: "constant modulus constant 10%4", seed: 0, input: "10%4", wantString: "10%4", wantRolls: []int{}, wantTotal: 2},
+		{name: "modulus before addition 2d6%4+1", seed: 2, input: "2d6%4+1", wantString: "2d6%4+1", wantRolls: []int{5, 1}, wantTotal: 3},
+		{name: "percentile die still works d%", seed: 0, input: "d%", wantString: "d%", wantRolls: []int{75}, wantTotal: 75},
+	}
+	runRoll20TestCases(t, tests)
+}
+
+func TestRoll20Spec_ModulusByZero(t *testing.T) {
+	program, err := CompileString("5%0")
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	if _, err := EvaluateProgram(program); err == nil {
+		t.Fatal("expected modulus by zero error")
+	} else if err.Error() != "modulus by zero" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRoll20Spec_DivisionByZero(t *testing.T) {
 	program, err := CompileString("5/0")
 	if err != nil {

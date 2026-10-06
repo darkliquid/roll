@@ -126,6 +126,8 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 		return tMULT, string(ch)
 	case ch == '/':
 		return tDIV, string(ch)
+	case ch == '%':
+		return tMOD, string(ch)
 	case ch == '(':
 		return tLPAREN, string(ch)
 	case ch == ')':
@@ -200,6 +202,9 @@ func (s *Scanner) scanDieOrDrop() (tok Token, lit string) {
 			tok = tDROPLOW
 		} else if tok == tDIE && ch == 'h' {
 			tok = tDROPHIGH
+		} else if tok == tDIE && ch == '%' && buf.Len() > 1 {
+			s.unread()
+			break
 		} else if tok == tDIE && !isNumber(ch) && !isDieChar(ch) {
 			if isValidDieRoll(ch) {
 				_, _ = buf.WriteRune(ch)
