@@ -437,7 +437,7 @@
     <form class="search" id="roll-form" autocomplete="off">
       <label class="search-field" for="expression">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14Z"/></svg>
-        <input type="text" id="expression" name="expression" placeholder="e.g. 4d6kh3, 1d20+5, 3d6!" disabled>
+        <input type="text" id="expression" name="expression" placeholder="e.g. 4d6kh3, 1d20+5, 2d6*3, floor(11/2)" disabled>
       </label>
       <div class="actions">
         <button class="btn btn--primary" type="submit" id="roll-btn" disabled>Roll</button>
@@ -539,6 +539,30 @@
         </div>
       </section>
       <section>
+        <h3>Math</h3>
+        <p>Multiply, divide, take a remainder, or raise to a power. The functions <code>floor</code>, <code>round</code>, <code>ceil</code> and <code>abs</code> act on a value, and a die can take a computed number of sides.</p>
+        <div class="chips">
+          <button type="button" class="chip" data-expr="2d6*3">2d6*3</button>
+          <button type="button" class="chip" data-expr="2d6/2">2d6/2</button>
+          <button type="button" class="chip" data-expr="2d6%3">2d6%3</button>
+          <button type="button" class="chip" data-expr="2**3">2**3</button>
+          <button type="button" class="chip" data-expr="floor(11/2)">floor(11/2)</button>
+          <button type="button" class="chip" data-expr="round(11/2)">round(11/2)</button>
+          <button type="button" class="chip" data-expr="ceil(11/2)">ceil(11/2)</button>
+          <button type="button" class="chip" data-expr="abs(-3)">abs(-3)</button>
+          <button type="button" class="chip" data-expr="3d(floor(6/2))">3d(floor(6/2))</button>
+        </div>
+      </section>
+      <section>
+        <h3>Matching</h3>
+        <p>Count matching dice, Yahtzee style. <code>mt</code> returns the number of matches; <code>m</code> only highlights them. An optional count sets how many dice must match and an optional comparison filters the value.</p>
+        <div class="chips">
+          <button type="button" class="chip" data-expr="20d6mt">20d6mt</button>
+          <button type="button" class="chip" data-expr="4d6mt3">4d6mt3</button>
+          <button type="button" class="chip" data-expr="5d6mt3&gt;4">5d6mt3&gt;4</button>
+        </div>
+      </section>
+      <section>
         <h3>Reference</h3>
         <p>Based on the <a href="https://wiki.roll20.net/Dice_Reference" rel="noopener">Roll20 Dice Rolling Language Specification</a>.</p>
       </section>
@@ -564,7 +588,12 @@
         "4d6ro1",
         "6d6sd",
         "{4d6, 2d8}>4",
-        "8d6"
+        "8d6",
+        "2d6*3",
+        "floor(11/2)+1d6",
+        "3d(floor(6/2))",
+        "20d6mt",
+        "4d%%2"
       ];
 
       var form = document.getElementById("roll-form");
