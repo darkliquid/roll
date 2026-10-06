@@ -25,6 +25,17 @@ func TestRoll20Spec_Division(t *testing.T) {
 	runRoll20TestCases(t, tests)
 }
 
+func TestRoll20Spec_Round(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "round half up round(11/2)", seed: 0, input: "round(11/2)", wantString: "round(11/2)", wantRolls: []int{}, wantTotal: 6},
+		{name: "round half up round(5/2)", seed: 0, input: "round(5/2)", wantString: "round(5/2)", wantRolls: []int{}, wantTotal: 3},
+		{name: "round toward zero round(1/3)", seed: 0, input: "round(1/3)", wantString: "round(1/3)", wantRolls: []int{}, wantTotal: 0},
+		{name: "round toward positive infinity round(-5/2)", seed: 0, input: "round(-5/2)", wantString: "round(-5/2)", wantRolls: []int{}, wantTotal: -2},
+		{name: "round of dice division round(2d6/4)", seed: 2, input: "round(2d6/4)", wantString: "round(2d6/4)", wantRolls: []int{5, 1}, wantTotal: 2},
+	}
+	runRoll20TestCases(t, tests)
+}
+
 func TestRoll20Spec_Floor(t *testing.T) {
 	tests := []roll20TestCase{
 		{name: "floor of division floor(11/2)", seed: 0, input: "floor(11/2)", wantString: "floor(11/2)", wantRolls: []int{}, wantTotal: 5},

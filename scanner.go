@@ -108,8 +108,14 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 		s.unread()
 		return s.scanKeep()
 	case ch == 'r':
-		s.unread()
-		return s.scanReroll()
+		if s.peekPrefix("ound") {
+			s.read()
+			s.read()
+			s.read()
+			s.read()
+			return tFUNC, "round"
+		}
+		return s.scanReroll(ch)
 	case ch == 's':
 		s.unread()
 		return s.scanSort()
@@ -294,10 +300,10 @@ func (s *Scanner) scanExplosions() (tok Token, lit string) {
 }
 
 // scanReroll consumes the current rune and all contiguous reroll runes.
-func (s *Scanner) scanReroll() (tok Token, lit string) {
+func (s *Scanner) scanReroll(lead rune) (tok Token, lit string) {
 	// Create a buffer and read the current character into it.
 	var buf bytes.Buffer
-	buf.WriteRune(s.read())
+	buf.WriteRune(lead)
 
 	// Read every subsequent character into the buffer.
 	// Rerolls are simple flags with an optional modifier
