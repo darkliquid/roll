@@ -2,6 +2,31 @@ package roll
 
 import "testing"
 
+func TestResultCounts_Explosions(t *testing.T) {
+	tests := []struct {
+		name  string
+		seed  int64
+		input string
+		want  int
+	}{
+		{name: "no explosion modifier", seed: 2, input: "2d6", want: 0},
+		{name: "exploding adds a die", seed: 2, input: "2d6!5", want: 1},
+		{name: "penetrating elided zero is not counted", seed: 2, input: "2d6!p5", want: 0},
+		{name: "penetrating kept die is counted", seed: 9, input: "2d6!p6", want: 1},
+		{name: "compounded counts contributing explosions", seed: 2, input: "2d6!!5", want: 1},
+		{name: "compounded counts each contributing explosion", seed: 1, input: "2d6!!6", want: 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evaluateProgram(t, tt.seed, tt.input)
+			if result.Explosions != tt.want {
+				t.Fatalf("explosions: got %d want %d", result.Explosions, tt.want)
+			}
+		})
+	}
+}
+
 func TestResultCounts_Rerolls(t *testing.T) {
 	tests := []struct {
 		name  string

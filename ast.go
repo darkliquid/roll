@@ -820,6 +820,7 @@ func applyExplosions(ctx *rollContext, term DiceTerm, die Die, result *Result, d
 				}
 				roll = die.Roll()
 				result.Results = append(result.Results, roll)
+				result.Explosions++
 			}
 		}
 	case Compounded:
@@ -831,6 +832,7 @@ func applyExplosions(ctx *rollContext, term DiceTerm, die Die, result *Result, d
 					return err
 				}
 				roll = die.Roll()
+				result.Explosions++
 			}
 		}
 		result.Results = append(result.Results, DieRoll{Result: compound, Symbol: strconv.Itoa(compound)})
@@ -850,6 +852,7 @@ func applyExplosions(ctx *rollContext, term DiceTerm, die Die, result *Result, d
 				newRoll.Result--
 				newRoll.Symbol = strconv.Itoa(newRoll.Result)
 				result.Results = append(result.Results, newRoll)
+				result.Explosions++
 			}
 		}
 	}
