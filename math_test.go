@@ -25,6 +25,16 @@ func TestRoll20Spec_Division(t *testing.T) {
 	runRoll20TestCases(t, tests)
 }
 
+func TestRoll20Spec_Exponentiation(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "constant power 2**3", seed: 0, input: "2**3", wantString: "2**3", wantRolls: []int{}, wantTotal: 8},
+		{name: "right associative 2**3**2", seed: 0, input: "2**3**2", wantString: "2**3**2", wantRolls: []int{}, wantTotal: 512},
+		{name: "dice power 3d6**2", seed: 2, input: "3d6**2", wantString: "3d6**2", wantRolls: []int{5, 1, 1}, wantTotal: 49},
+		{name: "power before multiplication 2*3**2", seed: 0, input: "2*3**2", wantString: "2*3**2", wantRolls: []int{}, wantTotal: 18},
+	}
+	runRoll20TestCases(t, tests)
+}
+
 func TestRoll20Spec_Modulus(t *testing.T) {
 	tests := []roll20TestCase{
 		{name: "dice modulus constant 2d6%3", seed: 2, input: "2d6%3", wantString: "2d6%3", wantRolls: []int{5, 1}, wantTotal: 0},

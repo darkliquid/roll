@@ -123,6 +123,10 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 	case ch == ',':
 		return tGROUPSEP, string(ch)
 	case ch == '*':
+		if s.peekPrefix("*") {
+			s.read()
+			return tPOW, "**"
+		}
 		return tMULT, string(ch)
 	case ch == '/':
 		return tDIV, string(ch)
@@ -330,6 +334,15 @@ func (s *Scanner) scanSort() (tok Token, lit string) {
 
 	// Otherwise return as a regular identifier.
 	return tok, buf.String()
+}
+
+// peekPrefix reports whether the upcoming input starts with prefix without consuming it.
+func (s *Scanner) peekPrefix(prefix string) bool {
+	b, err := s.r.Peek(len(prefix))
+	if err != nil && len(b) < len(prefix) {
+		return false
+	}
+	return string(b) == prefix
 }
 
 // read reads the next rune from the buffered reader.
