@@ -124,6 +124,8 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 		return tGROUPSEP, string(ch)
 	case ch == '*':
 		return tMULT, string(ch)
+	case ch == '/':
+		return tDIV, string(ch)
 	case ch == '(':
 		return tLPAREN, string(ch)
 	case ch == ')':

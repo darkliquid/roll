@@ -13,3 +13,26 @@ func TestRoll20Spec_Multiplication(t *testing.T) {
 	}
 	runRoll20TestCases(t, tests)
 }
+
+func TestRoll20Spec_Division(t *testing.T) {
+	tests := []roll20TestCase{
+		{name: "dice divided by constant 2d6/2", seed: 2, input: "2d6/2", wantString: "2d6/2", wantRolls: []int{5, 1}, wantTotal: 3},
+		{name: "constant divided by constant 7/2", seed: 0, input: "7/2", wantString: "7/2", wantRolls: []int{}, wantTotal: 3},
+		{name: "exact division 10/2", seed: 0, input: "10/2", wantString: "10/2", wantRolls: []int{}, wantTotal: 5},
+		{name: "division before addition 2d6/2+1", seed: 2, input: "2d6/2+1", wantString: "2d6/2+1", wantRolls: []int{5, 1}, wantTotal: 4},
+		{name: "chained division and multiplication 2d6/2*3", seed: 2, input: "2d6/2*3", wantString: "2d6/2*3", wantRolls: []int{5, 1}, wantTotal: 9},
+	}
+	runRoll20TestCases(t, tests)
+}
+
+func TestRoll20Spec_DivisionByZero(t *testing.T) {
+	program, err := CompileString("5/0")
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	if _, err := EvaluateProgram(program); err == nil {
+		t.Fatal("expected division by zero error")
+	} else if err.Error() != "division by zero" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
